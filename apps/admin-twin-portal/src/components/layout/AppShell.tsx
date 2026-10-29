@@ -20,7 +20,7 @@ interface NavigationItem {
   roles: Role[];
 }
 
-const allRoles: Role[] = ['MAINTENANCE_TECHNICIAN', 'INCIDENT_MANAGER', 'FACILITIES_ADMIN', 'PROCUREMENT_APPROVER', 'SYSTEM_ADMIN'];
+const allRoles: Role[] = ['MAINTENANCE_TECHNICIAN', 'INCIDENT_MANAGER', 'FACILITIES_ADMIN', 'PROCUREMENT_APPROVER', 'SYSTEM_ADMIN', 'DEPARTMENT_MANAGER'];
 const navigation: NavigationItem[] = [
   { id: 'twin', label: 'Digital twin', shortLabel: 'Twin', icon: Boxes, roles: allRoles },
   { id: 'dispatch', label: 'Incidents & dispatch', shortLabel: 'Dispatch', icon: GitPullRequestArrow, roles: ['MAINTENANCE_TECHNICIAN', 'INCIDENT_MANAGER', 'FACILITIES_ADMIN', 'SYSTEM_ADMIN'] },
@@ -36,6 +36,7 @@ const roleLabels: Record<Role, string> = {
   MAINTENANCE_TECHNICIAN: 'Maintenance Technician',
   INCIDENT_MANAGER: 'Incident Manager',
   FACILITIES_ADMIN: 'Facilities Administrator',
+  DEPARTMENT_MANAGER: 'Department Manager',
   PROCUREMENT_APPROVER: 'Procurement Approver',
   SYSTEM_ADMIN: 'System Administrator',
 };

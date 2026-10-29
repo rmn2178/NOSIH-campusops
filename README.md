@@ -132,6 +132,5 @@ equipment falsely flagged.
 
 - Analytics, bookings and chat intake are fully enforced in the database but only chat has a portal
   entry point; the analytics and booking workspaces are not yet mounted in the admin UI.
-- Costly-repair approval (above a repair threshold) is not implemented; only purchases are gated.
 - Notification delivery is simulated in `notification_logs` (status `SENT`), with no retry worker.
 - Edge Functions are optional and not deployed; scheduled work runs through pg_cron instead.

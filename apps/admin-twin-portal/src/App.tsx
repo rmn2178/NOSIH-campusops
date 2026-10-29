@@ -20,6 +20,7 @@ const access: Record<Role, WorkspaceId[]> = {
   FACILITIES_ADMIN: ['twin', 'dispatch', 'inventory', 'sla', 'integrations', 'timetable', 'audit'],
   PROCUREMENT_APPROVER: ['twin', 'inventory', 'timetable', 'audit'],
   SYSTEM_ADMIN: ['twin', 'dispatch', 'inventory', 'sla', 'moderation', 'integrations', 'timetable', 'audit'],
+  DEPARTMENT_MANAGER: ['twin', 'dispatch', 'inventory', 'sla', 'timetable', 'audit'],
 };
 
 function CurrentWorkspace() {
