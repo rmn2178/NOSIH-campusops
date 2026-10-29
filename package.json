@@ -1,0 +1,21 @@
+{
+  "name": "nosih",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:complaint": "npm run dev --workspace @nosih/complaint-portal",
+    "dev:admin": "npm run dev --workspace @nosih/admin-twin-portal",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@rollup/rollup-win32-x64-msvc": "4.66.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

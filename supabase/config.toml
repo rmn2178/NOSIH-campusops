@@ -1,0 +1,40 @@
+project_id = "gfivrhzguirfnoksrtza"
+
+[api]
+enabled = true
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 17
+
+[realtime]
+enabled = true
+
+[storage]
+enabled = true
+file_size_limit = "5MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5174", "https://*.vercel.app"]
+jwt_expiry = 3600
+enable_signup = true
+
+[functions.intake-complaint]
+verify_jwt = true
+
+[functions.post-comment]
+verify_jwt = true
+
+[functions.supplement-missing-info]
+verify_jwt = true
+
+[functions.inbound-email-webhook]
+verify_jwt = false
+
+[functions.sla-clock-tick]
+verify_jwt = false

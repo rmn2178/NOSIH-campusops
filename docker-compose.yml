@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: nosih
+      POSTGRES_USER: nosih
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-nosih}
+    ports:
+      - "5432:5432"
+    volumes:
+      - nosih-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nosih"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  api:
+    build: ./services/nosih-api
+    environment:
+      DATABASE_URL: postgresql+psycopg://nosih:${POSTGRES_PASSWORD:-nosih}@postgres:5432/nosih
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:5174}
+      IDENTITY_VAULT_FERNET_KEY: ${IDENTITY_VAULT_FERNET_KEY:?set a Fernet key for the identity vault}
+      JWT_SECRET: ${JWT_SECRET:?set a production JWT secret}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  nosih-postgres:

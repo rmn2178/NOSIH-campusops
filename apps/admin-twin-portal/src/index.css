@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;650;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #141413;
+  background: #faf9f5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { min-height: 100%; margin: 0; }
+body { min-width: 320px; overflow-x: hidden; }
+button, input, textarea, select { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+::selection { background: #d7eadf; color: #143324; }
+
+.cloth-canvas {
+  background-color: #faf9f5;
+  background-image:
+    linear-gradient(rgba(255,255,255,.44), rgba(255,255,255,.44)),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.12'/%3E%3C/svg%3E");
+}
+
+.cloth-panel {
+  background: rgba(250,249,245,.92);
+  border: 1px solid #e2e0d8;
+  box-shadow: 0 10px 30px -10px rgba(24,24,22,.06), 0 2px 6px -1px rgba(24,24,22,.035);
+  backdrop-filter: blur(20px);
+}
+
+.hairline-grid {
+  background-image: linear-gradient(#e8e5dd 1px, transparent 1px), linear-gradient(90deg, #e8e5dd 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.scrollbar-thin { scrollbar-width: thin; scrollbar-color: #d6d3ca transparent; }
+.scrollbar-thin::-webkit-scrollbar { width: 5px; height: 5px; }
+.scrollbar-thin::-webkit-scrollbar-thumb { background: #d6d3ca; border-radius: 99px; }
+
+.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.text-balance { text-wrap: balance; }
+
+input[type='range'] { accent-color: #262623; }
+
+@keyframes statusPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,.22); }
+  50% { box-shadow: 0 0 0 5px rgba(248,113,113,0); }
+}
+.fault-pulse { animation: statusPulse 2s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+}
