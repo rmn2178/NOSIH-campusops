@@ -24,7 +24,7 @@ type ChatReply = {
 };
 
 const SUGGESTIONS: Record<string, string[]> = {
-  twin: ['Which spaces are unhealthy right now?', 'What is the state of the selected space?'],
+  twin: ['Which spaces are unhealthy right now?', 'Which work orders are most urgent?'],
   dispatch: ['Which work orders need an assignee first?', 'Summarise the active incidents.'],
   sla: ['Which SLA clocks are closest to breach?', 'What is breaching in the next hour?'],
   inventory: ['Which parts are short for open work orders?', 'What purchase requests are waiting?'],
@@ -50,13 +50,15 @@ export function AssistantDock() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const prompts = useMemo(
-    () => [
-      ...(selectedSpaceCode ? [`Find a relocation room for ${selectedSpaceCode}`] : []),
-      ...(SUGGESTIONS[workspace] ?? SUGGESTIONS.twin),
-    ],
-    [selectedSpaceCode, workspace],
-  );
+  const prompts = useMemo(() => {
+    const base = SUGGESTIONS[workspace] ?? SUGGESTIONS.twin;
+    if (!selectedSpaceCode) return base;
+    return [
+      `What is the state of ${selectedSpaceCode}?`,
+      `Find a relocation room for ${selectedSpaceCode}`,
+      ...base,
+    ];
+  }, [selectedSpaceCode, workspace]);
 
   useEffect(() => {
     if (open) window.setTimeout(() => inputRef.current?.focus(), 60);

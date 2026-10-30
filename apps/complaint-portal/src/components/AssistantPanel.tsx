@@ -27,8 +27,8 @@ type ChatReply = {
 const SUGGESTIONS = [
   'Is my room usable right now?',
   'What faults are open on campus?',
-  'How long will my complaint take?',
-  'Which staff are on shift nearby?',
+  'What is the status of my complaint?',
+  'Which staff are on shift right now?',
 ];
 
 function newId() {
@@ -49,6 +49,14 @@ export function AssistantPanel() {
 
   const spaceLabel = useMemo(
     () => (focusSpace ? focusSpace : 'whole campus'),
+    [focusSpace],
+  );
+
+  const suggestions = useMemo(
+    () => [
+      focusSpace ? 'Is my room usable right now?' : 'Which rooms are unusable right now?',
+      ...SUGGESTIONS.slice(1),
+    ],
     [focusSpace],
   );
 
@@ -166,7 +174,7 @@ export function AssistantPanel() {
                   SLA clocks always match what dispatch sees.
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {SUGGESTIONS.map((suggestion) => (
+                  {suggestions.map((suggestion) => (
                     <button
                       key={suggestion}
                       type="button"
