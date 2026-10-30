@@ -76,6 +76,17 @@ def main() -> None:
                              "pg_get_functiondef('public.nosih_recompute_space_state(text)'::regprocedure)) > 0")
         check("P3 twin recompute covers bill bots", row[0] is True)
 
+        # -- Document numbers are race-proof against the cron ----------------------
+        row = fetch_one(cur, "select count(*) = count(distinct wo_number) from public.work_orders")
+        check("P25 work order numbers unique", row[0] is True)
+        row = fetch_one(cur, "select to_regclass('public.work_orders_wo_number_uq') is not null"
+                             " and to_regclass('public.complaints_ticket_number_uq') is not null")
+        check("P26 document numbers carry unique indexes", row[0] is True)
+        row = fetch_one(cur, "select strpos(pg_get_functiondef(p.oid), 'nosih_doc_number_seq') > 0"
+                             " from pg_proc p join pg_namespace n on n.oid = p.pronamespace"
+                             " where n.nspname = 'public' and p.proname = 'rpc_submit_complaint'")
+        check("P27 tickets and work orders draw from the number sequence", row is not None and row[0] is True)
+
         # -- Tick gates -----------------------------------------------------------
         cur.execute("update public.simulation_config set enabled = false where id")
         row = fetch_one(cur, "select public.rpc_pulse_tick()->>'reason'")
@@ -93,6 +104,11 @@ def main() -> None:
         row = fetch_one(cur, "select public.rpc_pulse_tick()->>'reason'")
         check("P6 open-simulated cap enforced", row[0] == "CAP_REACHED", row[0])
         cur.execute("delete from public.simulation_events where template_key = 'PROBE'")
+
+        # Live ACTIVE events share the open-fault cap; lift it inside this
+        # transaction so the rotation and chain tests never starve on
+        # whatever the campus pulse happens to be doing right now.
+        cur.execute("update public.simulation_config set max_open_simulated = 10")
 
         # -- Injection through the real pipeline -----------------------------------
         # Deterministic per-family phases: mask the other families in this
@@ -125,19 +141,24 @@ def main() -> None:
 
         events = [e for e in (bot, canteen) if e.get("fired") is True]
         kinds = {e["facility_kind"] for e in events}
-        spare = None
-        for _ in range(8):
-            res = fetch_one(cur, "select public.nosih_pulse_inject()")[0]
-            if res.get("fired") is not True:
-                break
-            events.append(res)
-            kinds.add(res["facility_kind"])
-            if res["facility_kind"] in ("ROOM", "LAB") and spare is None:
-                spare = res
-            if {"ROOM", "LAB"} <= kinds:
-                break
+        # Meal windows double the canteen/bot weight, so a random loop can miss
+        # rooms and labs for many tries; force one lab and one room through the
+        # same mask mechanism instead — every family must stay injectable.
+        mask_others("labs")
+        lab_ev = fetch_one(cur, "select public.nosih_pulse_inject()")[0]
+        unmask_all()
+        if lab_ev.get("fired") is True:
+            events.append(lab_ev)
+            kinds.add(lab_ev["facility_kind"])
+        mask_others("rooms")
+        room_ev = fetch_one(cur, "select public.nosih_pulse_inject()")[0]
+        unmask_all()
+        if room_ev.get("fired") is True:
+            events.append(room_ev)
+            kinds.add(room_ev["facility_kind"])
+        spare = next((e for e in events if e.get("facility_kind") in ("ROOM", "LAB")), None)
         check("P9 every facility family stays in rotation",
-              {"CANTEEN", "BILL_BOT"}.issubset(kinds) and {"ROOM", "LAB"} & kinds, sorted(kinds))
+              {"CANTEEN", "BILL_BOT", "LAB", "ROOM"}.issubset(kinds), sorted(kinds))
         check("P10 every injection produced complaint + work order + SLA clock",
               all(e.get("ticket_number") and e.get("work_order_id") and e.get("sla_clock_id") for e in events),
               [(e.get("facility_kind"), e.get("ticket_number")) for e in events])
@@ -197,6 +218,10 @@ def main() -> None:
 
             sku = fetch_one(cur, "select sku_code from public.assets where asset_code = %s",
                             (canteen["asset_code"],))[0]
+            # The living campus consumes stock; top the spare up in-transaction
+            # so the reservation itself is what's under test, not seed levels.
+            cur.execute("update public.inventory_items set on_hand_qty = on_hand_qty + 5"
+                        " where sku_code = %s", (sku,))
             stock = fetch_one(cur, "select on_hand_qty - reserved_qty from public.inventory_items"
                                    " where sku_code = %s", (sku,))[0]
             row = fetch_one(cur, "select public.rpc_reserve_parts_for_work_order(%s, %s,"
@@ -217,15 +242,21 @@ def main() -> None:
                 "select (select status from public.complaints where ticket_number = %s),"
                 "       (select status from public.assets where asset_code = %s),"
                 "       (select visual_state from public.canteens where code = %s),"
-                "       (select total_cost_inr from public.maintenance_history"
-                "         where work_order_number = %s order by id desc limit 1),"
-                "       (select downtime_mins from public.maintenance_history"
-                "         where work_order_number = %s order by id desc limit 1)",
+                "       (select max(total_cost_inr) from public.maintenance_history"
+                "         where work_order_number = %s),"
+                "       (select max(downtime_mins) from public.maintenance_history"
+                "         where work_order_number = %s),"
+                "       (select bool_or(parts_cost_inr > 0) from public.maintenance_history"
+                "         where work_order_number = %s)",
                 (canteen["ticket_number"], canteen["asset_code"], canteen["space_code"],
-                 canteen.get("work_order_number"), canteen.get("work_order_number"),))
+                 canteen.get("work_order_number"), canteen.get("work_order_number"),
+                 canteen.get("work_order_number"),))
+            # Multi-asset work orders write one history row per target asset; the
+            # consumed parts land on the primary row, sibling rows carry labour
+            # only. The repair is priced when any row reconciles the reservation.
             check("P17 completion restores twin, asset and prices the repair",
                   row[0] == "RESOLVED" and row[1] == "OK" and row[2] == "HEALTHY"
-                  and row[3] is not None and row[3] > 0 and row[4] is not None, row)
+                  and row[3] is not None and row[3] > 0 and row[4] is not None and row[5] is True, row)
 
         # -- Bot chain: completion must restore the bot twin (pipeline gap fix) -----
         if bot:
