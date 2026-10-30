@@ -261,7 +261,9 @@ the ticket and pulses; the feed, inspector and assistant read the same source. C
 materiality, not wording: safety overrides, smart boards, lab workstations and canteen appliances are
 **major** (red, pulsing), while single manageable faults — one fan, one LED, a socket — glow **light
 orange** and the legend names them *Manageable*. Water meeting electrics is a hazard, not a manageable
-fault: the replayable leak scenario floods fans and flickering lights, so its room stays red.
+fault: the replayable leak scenario floods fans and flickering lights, so its room stays red. The model
+refines category, skill and dispatch priority, but materiality decides the colour: a fault whose targets
+are all standard assets is never escalated to major by model urgency alone.
 
 **Asset records** — selecting any asset in the twin opens its full service record: installed age, spare
 SKU, 30-day failure count, health score, open work order, lifetime downtime and cost. Each previous
@@ -304,12 +306,12 @@ the procurement funnel.
 | `verify_repairs.py` | repair gate, approval, parts consumption, clock coverage, exams |
 | `verify_allocation.py` | ranking fields, lock gate, assignment, lock consumption, workload |
 | `verify_dispatch_guard.py` | caller-aware locks, stale assignment, rank RBAC, self-only claims |
-| `verify_chat_intake.py` | draft extraction, missing-room refusal, CHAT ticket + WO, merge link, sign-in gate |
+| `verify_chat_intake.py` | draft extraction (including an explicit room code without the model), missing-room refusal, CHAT ticket + WO, merge link, sign-in gate |
 | `verify_email_intake.py` | EMAIL_INBOX channel, reporter binding, ack log, merge without a second WO |
 | `verify_scenarios.py` | RBAC, leak/power runs, idempotency, reset, exact asset restoration |
 | `verify_pulse.py` | cron schedule, paused/cooldown/cap gates, all four facility families forced through the real pipeline, assign→parts→completion→twin restore with priced repair, auto-heal, per-event revert, race-proof document numbers, RBAC |
 | `verify_seed_realism.py` | 36 distinct staff surnames per role with bounded repeats, 50 priced repairs spread over the last 90 days |
-| `verify_twin_severity.py` | single-fan fault stays manageable/orange, smart board and safety faults go major/red, mixed complaints resolve in the right order, pulse follows the rubric |
+| `verify_twin_severity.py` | single-fan fault stays manageable/orange, smart board and safety faults go major/red, mixed complaints resolve in the right order, pulse follows the rubric, no failed asset outlives its complaint |
 | `verify_workforce.py` | 30 technicians with unique names, every skill staffed, every open job ranks ≥2 and auto-assigns within capacity, off-shift/leave/capacity/clearance gates, summary RBAC |
 | `verify_staff_profile.py` | roster of 30 with identity and load, profile stats reconcile with the database, capped job/repair lists, unknown code 404, student denial |
 | `verify_sla_integrity.py` | close/freeze on completion, reopen without double counts, defensive tick, strength revalidation |
@@ -326,7 +328,7 @@ All print `ALL PASS` on the live project.
 
 ## 10. Operations
 
-- Migrations `0001–0041` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Migrations `0001–0043` are applied in order with `apply_sql_file.py`; each is idempotent.
 - Document numbers (tickets, work orders, incidents) draw from one monotonic sequence with unique
   indexes, so the campus pulse cron can never collide with an interactive session — before migration
   `0034` a concurrent tick and submit could mint the same work-order number and price a repair at zero.
@@ -340,7 +342,8 @@ All print `ALL PASS` on the live project.
   board, workstation and bill-bot faults stay major. Real intake still runs the model.
 - Seed realism polish (already applied to the live project): `f4_diversify_names.sql` reassigns
   faculty/lab-staff surnames across a 36-name pool, `f4_history_spread.sql` spreads the 50 priced
-  maintenance records across the last 90 days.
+  maintenance records across the last 90 days, and `f8_heal_orphan_assets.sql` restores failed
+  assets left behind by reverted demo runs.
 - Real edge cases: outside 09:00–15:00 IST the clock pins to P1; weekends freeze; scrubbing sets the
   clock to MANUAL until `rpc_set_clock_mode('LIVE')`.
 - Rotate any key or access token pasted into a chat.

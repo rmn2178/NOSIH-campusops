@@ -81,6 +81,15 @@ def main():
         (select criticality from public.assets where asset_type = 'LAB_WORKSTATION' limit 1)""")
     check("S1 asset criticality map", row == ("CRITICAL", "STANDARD", "CRITICAL", "CRITICAL"), row)
 
+    orphan = one(cur, """select count(*) from public.assets a
+                          where a.status = 'FAULTY'
+                            and not exists (
+                              select 1 from public.complaints c
+                               where c.space_code = a.parent_space_code
+                                 and c.moderation_status = 'APPROVED'
+                                 and c.status in ('OPEN', 'TRIAGED', 'IN_PROGRESS', 'BLOCKED_PARTS'))""")[0]
+    check("S17 every failed asset belongs to an open complaint", orphan == 0, orphan)
+
     rooms = [r[0] for r in cur.execute(
         "select code from public.rooms where visual_state = 'HEALTHY' order by code limit 4").fetchall()]
     check("S2 four healthy rooms available for the test", len(rooms) == 4, rooms)
