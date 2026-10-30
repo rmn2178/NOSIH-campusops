@@ -254,13 +254,15 @@ reporting every room that is now too small.
 the ticket and pulses; the feed, inspector and assistant read the same source. Colour follows fault
 materiality, not wording: safety overrides, smart boards, lab workstations and canteen appliances are
 **major** (red, pulsing), while single manageable faults — one fan, one LED, a socket — glow **light
-orange** and the legend names them *Manageable*.
+orange** and the legend names them *Manageable*. Water meeting electrics is a hazard, not a manageable
+fault: the replayable leak scenario floods fans and flickering lights, so its room stays red.
 
 **Asset records** — selecting any asset in the twin opens its full service record: installed age, spare
 SKU, 30-day failure count, health score, open work order, lifetime downtime and cost. Each previous
 repair shows the date, work order, fault, action, technician, parts consumed, parts cost, labour cost and
 total, linked to the complaint that raised it. A `BEFORE INSERT` trigger prices every new maintenance row
-from its reservations and the technician's hourly rate; the same panel exports the whole history as CSV.
+from its reservations and the technician's hourly rate; billed downtime is clamped to 24 hours, so a
+backlogged ticket cannot bill months of labour. The same panel exports the whole history as CSV.
 Searching a room code now prefers an exact match over another room's zero-index alias.
 
 **Analytics** — one RPC returns pipeline counts, SLA mix, utilisation, shortages, recurring faults and
@@ -305,7 +307,7 @@ the procurement funnel.
 | `verify_workforce.py` | 30 technicians with unique names, every skill staffed, every open job ranks ≥2 and auto-assigns within capacity, off-shift/leave/capacity/clearance gates, summary RBAC |
 | `verify_staff_profile.py` | roster of 30 with identity and load, profile stats reconcile with the database, capped job/repair lists, unknown code 404, student denial |
 | `verify_sla_integrity.py` | close/freeze on completion, reopen without double counts, defensive tick, strength revalidation |
-| `verify_asset_history.py` | 50 priced repairs, parts/labour/total reconciliation, open work order, empty record, RBAC and trigger pricing |
+| `verify_asset_history.py` | 50 priced repairs, parts/labour/total reconciliation, 24-hour downtime cap (a backdated 90-day ticket bills 1,440 min), open work order, empty record, RBAC and trigger pricing |
 | `verify_rbac_matrix.py` | 8 role sign-ins, department-scoped work orders/SLA/PRs, audit and directory lockdown, forged-email denial, cross-department approval, self-approval |
 | `verify_chat.py` | question reaches the model, grounded codes, multi-turn, ownership guard |
 | `realistic_timetable.py` | rebuilds slots; reports collisions, load, labs |

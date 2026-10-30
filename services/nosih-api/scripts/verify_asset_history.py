@@ -58,6 +58,17 @@ def main() -> None:
                     "where parts_used_json <> '[]' and jsonb_array_length(parts_used_json::jsonb) = 0")
         parts_bad = cur.fetchone()[0]
         check("parts payload is valid JSON for every row", parts_bad == 0, parts_bad)
+        cur.execute("select count(*), max(downtime_mins), max(labour_cost_inr) from public.maintenance_history")
+        repair_rows, longest, costliest = cur.fetchone()
+        check("billed downtime never exceeds 24 hours", repair_rows > 0 and longest <= 1440,
+              (repair_rows, longest))
+        cur.execute("""select count(*) from public.maintenance_history mh
+                         join public.staff_profiles sp on sp.staff_code = mh.technician_code
+                        where mh.downtime_mins > 0
+                          and abs(mh.labour_cost_inr
+                                  - round((mh.downtime_mins / 60.0 * sp.hourly_cost_inr)::numeric, 2)) > 0.01""")
+        skewed = cur.fetchone()[0]
+        check("labour matches billed downtime at the technician rate", skewed == 0, skewed)
         cur.execute("select has_function_privilege('anon', "
                     "'public.rpc_get_asset_history(text)', 'EXECUTE')")
         check("anonymous callers cannot execute the asset record", cur.fetchone()[0] is False)
@@ -95,14 +106,35 @@ def main() -> None:
           0 < stats.get("health_score", 0) <= 100
           and stats.get("health_label") in ("CRITICAL", "WATCH", "SERVICED", "STABLE"), stats.get("health_label"))
 
-    open_record = rpc(facilities, "SB-C4-03-01")
+    # Fixtures move with the live queue: pick the primary asset of a currently
+    # open work order, and an asset that has never been repaired.
+    with psycopg.connect(url()) as conn, conn.cursor() as cur:
+        cur.execute("""select w.wo_number, w.status,
+                              jsonb_array_elements_text(w.target_asset_codes_json::jsonb) as asset
+                         from public.work_orders w
+                        where w.status in ('PENDING_ASSIGNMENT', 'ASSIGNED', 'IN_PROGRESS')
+                          and jsonb_array_length(w.target_asset_codes_json::jsonb) > 0
+                        order by w.id limit 1""")
+        wo_number, wo_status, open_asset = cur.fetchone()
+        cur.execute("""select a.asset_code from public.assets a
+                        where not exists (select 1 from public.maintenance_history m
+                                           where m.asset_code = a.asset_code)
+                          and not exists (select 1 from public.work_orders w
+                                           where w.status in ('PENDING_ASSIGNMENT', 'ASSIGNED', 'IN_PROGRESS')
+                                             and w.target_asset_codes_json::text like '%' || a.asset_code || '%')
+                        order by a.asset_code limit 1""")
+        clean_asset = cur.fetchone()[0]
+
+    open_record = rpc(facilities, open_asset)
     current = open_record.get("current_work_order") or {}
     check("open work order is surfaced on the asset",
-          open_record.get("error") is None and current.get("wo_number") == "WO-2026-0062"
-          and current.get("status") == "ASSIGNED", current)
+          open_record.get("error") is None and current.get("wo_number") == wo_number
+          and current.get("status") == wo_status, (open_asset, current))
+    empty_record = rpc(facilities, clean_asset)
     check("asset with no repairs returns an explicit empty record",
-          open_record.get("history") == [] and open_record.get("stats", {}).get("repair_count") == 0,
-          open_record.get("stats", {}).get("repair_count"))
+          empty_record.get("error") is None and empty_record.get("history") == []
+          and empty_record.get("stats", {}).get("repair_count") == 0,
+          (clean_asset, empty_record.get("stats", {}).get("repair_count")))
 
     denied = rpc(faculty, "FAN-A1-02-01")
     check("faculty session cannot read the operational asset record", denied.get("error") == "FORBIDDEN", denied)
@@ -128,6 +160,39 @@ def main() -> None:
         check("new repair rows are priced automatically",
               abs(float(labour) - 2 * rate) < 0.01 and abs(float(total_cost) - float(labour)) < 0.01,
               (staff_code, rate, labour))
+        conn.rollback()
+
+    # A ticket raised months ago must not bill months of labour: completion
+    # clamps downtime to 24 hours before pricing the repair.
+    with psycopg.connect(url()) as conn, conn.cursor() as cur:
+        cur.execute("select w.id, w.wo_number, sp.hourly_cost_inr "
+                    "from public.work_orders w "
+                    "join public.staff_profiles sp on sp.staff_code = w.assigned_staff_code "
+                    "where w.assigned_staff_code is not null "
+                    "and w.status in ('ASSIGNED', 'IN_PROGRESS') "
+                    "order by w.id limit 1")
+        row = cur.fetchone()
+        check("an assigned work order is available to backdate", row is not None, row)
+        if row:
+            wo_id, wo_number, rate = row
+            cur.execute("update public.work_orders set created_at = now() - interval '90 days' "
+                        "where id = %s", (wo_id,))
+            cur.execute("select set_config('request.jwt.claims', %s, true)",
+                        (json.dumps({"sub": facilities, "role": "authenticated"}),))
+            cur.execute("set local role authenticated")
+            cur.execute("select public.rpc_complete_work_order(%s, 'Backdated completion check', null)",
+                        (wo_id,))
+            done = cur.fetchone()[0]
+            check("a 90-day-old ticket still completes", done.get("success") is True, done)
+            cur.execute("reset role")
+            cur.execute("select max(downtime_mins), max(labour_cost_inr), max(total_cost_inr) "
+                        "from public.maintenance_history where work_order_number = %s", (wo_number,))
+            longest, labour, total_cost = cur.fetchone()
+            check("backdated completion bills at most 24 hours of labour",
+                  int(longest) == 1440
+                  and abs(float(labour) - 24 * float(rate)) < 0.01
+                  and float(total_cost) <= 24 * float(rate) + 5000,
+                  (wo_number, longest, labour, rate))
         conn.rollback()
 
     print(f"\nRESULT: {'ALL PASS' if not failures else f'{len(failures)} FAILURE(S)'}")
