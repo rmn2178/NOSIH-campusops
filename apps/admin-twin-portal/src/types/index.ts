@@ -308,6 +308,41 @@ export interface RoomOccupancy {
   conflicts: RoomConflict[];
 }
 
+export interface ScenarioSummary {
+  scenario_key?: string;
+  title?: string;
+  space_code?: string;
+  space_type?: 'ROOM' | 'LAB';
+  complaint_id?: number;
+  ticket_number?: string;
+  work_order_id?: number;
+  work_order_number?: string;
+  sla_clock_id?: number;
+  description?: string;
+  prior_assets?: Array<{ asset_code: string; status: string }>;
+  error?: unknown;
+}
+
+export interface ScenarioRun {
+  id: string;
+  scenario_key: 'WATER_LEAK' | 'POWER_FAULT_LAB';
+  title: string;
+  status: 'RUNNING' | 'COMPLETED' | 'REVERTED' | 'FAILED';
+  started_at: string;
+  completed_at?: string | null;
+  summary_json: ScenarioSummary;
+  created_by?: string | null;
+}
+
+export interface ScenarioResult extends ScenarioSummary {
+  success: boolean;
+  error?: string;
+  idempotent?: boolean;
+  run_id?: string;
+  status?: string;
+  already_reverted?: boolean;
+}
+
 export interface UnavailableResource {
   code: string;
   name?: string;

@@ -26,6 +26,9 @@ import type {
   RoomConflict,
   RoomConflictResult,
   RoomOccupancy,
+  ScenarioResult,
+  ScenarioRun,
+  ScenarioSummary,
   SlaClock,
   SpaceDetail,
   StaffRankingResult,
@@ -419,6 +422,58 @@ function mapBookingResult(raw: Raw): BookingResult {
   };
 }
 
+function mapScenarioSummary(raw: Raw): ScenarioSummary {
+  const optionalNumber = (value: unknown) =>
+    value === undefined || value === null ? undefined : num(value);
+  return {
+    scenario_key: raw.scenario_key ? str(raw.scenario_key) : undefined,
+    title: raw.title ? str(raw.title) : undefined,
+    space_code: raw.space_code ? str(raw.space_code) : undefined,
+    space_type: (raw.space_type as ScenarioSummary['space_type']) ?? undefined,
+    complaint_id: optionalNumber(raw.complaint_id),
+    ticket_number: raw.ticket_number ? str(raw.ticket_number) : undefined,
+    work_order_id: optionalNumber(raw.work_order_id),
+    work_order_number: raw.work_order_number ? str(raw.work_order_number) : undefined,
+    sla_clock_id: optionalNumber(raw.sla_clock_id),
+    description: raw.description ? str(raw.description) : undefined,
+    prior_assets: Array.isArray(raw.prior_assets)
+      ? (raw.prior_assets as Raw[]).map((asset) => ({
+          asset_code: str(asset.asset_code),
+          status: str(asset.status),
+        }))
+      : [],
+    error: raw.error,
+  };
+}
+
+function mapScenarioRun(raw: Raw): ScenarioRun {
+  const summary = typeof raw.summary_json === 'string'
+    ? (JSON.parse(raw.summary_json) as Raw)
+    : ((raw.summary_json as Raw) ?? {});
+  return {
+    id: str(raw.id),
+    scenario_key: (raw.scenario_key as ScenarioRun['scenario_key']) ?? 'WATER_LEAK',
+    title: str(raw.title),
+    status: (raw.status as ScenarioRun['status']) ?? 'RUNNING',
+    started_at: str(raw.started_at),
+    completed_at: raw.completed_at ? str(raw.completed_at) : null,
+    summary_json: mapScenarioSummary(summary),
+    created_by: raw.created_by ? str(raw.created_by) : null,
+  };
+}
+
+function mapScenarioResult(raw: Raw): ScenarioResult {
+  return {
+    ...mapScenarioSummary(raw),
+    success: Boolean(raw.success),
+    error: raw.error ? str(raw.error) : undefined,
+    idempotent: raw.idempotent === undefined ? undefined : Boolean(raw.idempotent),
+    run_id: raw.run_id === undefined ? undefined : str(raw.run_id),
+    status: raw.status ? str(raw.status) : undefined,
+    already_reverted: raw.already_reverted === undefined ? undefined : Boolean(raw.already_reverted),
+  };
+}
+
 async function fetchWorkOrder(id: string | number): Promise<WorkOrder> {
   const { data, error } = await supabase.from('work_orders').select('*').eq('id', Number(id)).maybeSingle();
   if (error || !data) throw new ApiError(error?.message ?? 'Work order not found', 404, null);
@@ -515,6 +570,23 @@ export const api = {
       const raw = (await rpc.cancelBooking(Number(bookingId), profile.email)) as Raw;
       if (!raw.success) throw new ApiError(str(raw.error ?? 'Cancellation failed'), 409, raw);
       return mapBookingResult(raw);
+    },
+  },
+
+  scenarios: {
+    list: async (): Promise<ScenarioRun[]> => {
+      const rows = (await rpc.listScenarios()) as Raw[];
+      return rows.map(mapScenarioRun);
+    },
+    run: async (key: 'WATER_LEAK' | 'POWER_FAULT_LAB'): Promise<ScenarioResult> => {
+      const profile = await loadProfile();
+      const raw = (await rpc.runScenario(key, profile.email)) as Raw;
+      return mapScenarioResult(raw);
+    },
+    reset: async (runId: string): Promise<ScenarioResult> => {
+      const profile = await loadProfile();
+      const raw = (await rpc.resetScenario(Number(runId), profile.email)) as Raw;
+      return mapScenarioResult(raw);
     },
   },
 

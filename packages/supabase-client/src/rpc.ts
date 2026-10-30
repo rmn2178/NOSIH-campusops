@@ -118,6 +118,14 @@ export const rpc = {
       .rpc('rpc_get_room_occupancy', { p_space_code: spaceCode, p_from: from, p_to: to })
       .then(unwrap),
 
+  listScenarios: () => supabase.rpc('rpc_list_scenarios').then(unwrap),
+
+  runScenario: (key: string, email: string) =>
+    supabase.rpc('rpc_run_scenario', { p_key: key, p_actor_email: email }).then(unwrap),
+
+  resetScenario: (runId: number, email: string) =>
+    supabase.rpc('rpc_reset_scenario', { p_run_id: runId, p_actor_email: email }).then(unwrap),
+
   rankStaff: (workOrderId: number) =>
     supabase.rpc('rpc_rank_staff_for_work_order', { p_work_order_id: workOrderId }).then(unwrap),
 

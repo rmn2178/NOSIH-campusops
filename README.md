@@ -21,7 +21,7 @@ packages/
   supabase-client/          shared typed client: auth, RPC wrappers, realtime
 services/nosih-api/         Python seed generator, migrations runner, verification scripts
 supabase/
-  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0023)
+  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0024)
   functions/                optional Edge Functions (email webhook, SLA tick) — not required
 docs/screenshots/           reference captures
 README.md  Makefile  docker-compose.yml
@@ -204,6 +204,11 @@ one-click alternatives, and active bookings can be cancelled in place.
 **Relocation** — ranks healthy, unoccupied, unlocked rooms by building/floor proximity, refuses
 smart-board-less rooms, rewrites the timetable slot, notifies the class advisor.
 
+**Scenarios** — the dispatch workspace carries a replayable lab with two disruptions: a water leak in a
+live classroom and a lab power fault. Each run creates a real complaint, work order and SLA clock,
+damages the twin, and records the exact prior room/asset state. Runs are idempotent and can be reverted
+to their pre-run state, so the same demo can be delivered twice.
+
 **SLA** — a minute cron syncs the IST clock, accrues active minutes, emits 75% warnings and tiered
 breach notifications, and pauses clocks for parts or completion states.
 
@@ -245,6 +250,7 @@ the procurement funnel.
 | `verify_dispatch_guard.py` | caller-aware locks, stale assignment, rank RBAC, self-only claims |
 | `verify_chat_intake.py` | draft extraction, missing-room refusal, CHAT ticket + WO, merge link, sign-in gate |
 | `verify_email_intake.py` | EMAIL_INBOX channel, reporter binding, ack log, merge without a second WO |
+| `verify_scenarios.py` | RBAC, leak/power runs, idempotency, reset, exact asset restoration |
 | `verify_chat.py` | question reaches the model, grounded codes, multi-turn, ownership guard |
 | `realistic_timetable.py` | rebuilds slots; reports collisions, load, labs |
 | `unique_student_identities.py` | unique names and `STU-…` codes per student |
@@ -255,7 +261,7 @@ All print `ALL PASS` on the live project.
 
 ## 10. Operations
 
-- Migrations `0001–0023` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Migrations `0001–0024` are applied in order with `apply_sql_file.py`; each is idempotent.
 - Vault secrets: `xai_api_key` (Groq `gsk_` keys auto-route to Groq, `xai-` to x.ai), optional
   `llm_model`, `nosih_vault_secret` for anonymous identities.
 - pg_cron jobs: `nosih-clock-tick` every minute (clock + SLA), `nosih-ai-maintenance` every minute.
