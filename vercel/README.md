@@ -2,7 +2,8 @@
 
 This folder is a self-contained copy of `apps/complaint-portal` plus the shared
 `@nosih/supabase-client` package. It does **not** depend on the monorepo, so it
-can be uploaded to Vercel as its own project.
+can be uploaded to Vercel as its own project. Node is pinned to `26.x` in
+`engines` because Vercel has retired Node 20.
 
 ## Run it locally
 
