@@ -28,10 +28,10 @@ export function urgencyLabel(urgency: Urgency): string {
 
 export function twinLabel(state: TwinState): string {
   const labels: Record<TwinState, string> = {
-    HEALTHY: 'Healthy · Resolved',
-    FAULTY: 'Faulty · Light Red',
-    DEGRADED: 'Degraded · Amber',
-    BLOCKED_PARTS: 'Blocked on Parts',
+    HEALTHY: 'Healthy',
+    FAULTY: 'Major fault',
+    DEGRADED: 'Manageable fault',
+    BLOCKED_PARTS: 'Blocked on parts',
   };
   return labels[state];
 }

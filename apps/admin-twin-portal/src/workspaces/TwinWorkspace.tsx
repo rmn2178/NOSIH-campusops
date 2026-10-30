@@ -56,7 +56,7 @@ export function TwinWorkspace() {
       rooms: spaces.filter((space) => space.kind === 'CLASSROOM').length,
       labs: spaces.filter((space) => space.kind === 'LAB').length,
       facilities: spaces.filter((space) => space.kind === 'CANTEEN' || space.kind === 'BILL_BOT').length,
-      faults: spaces.filter((space) => space.visual_state === 'FAULTY' || space.visual_state === 'BLOCKED_PARTS').length,
+      faults: spaces.filter((space) => space.visual_state !== 'HEALTHY').length,
     };
   }, [overview]);
 

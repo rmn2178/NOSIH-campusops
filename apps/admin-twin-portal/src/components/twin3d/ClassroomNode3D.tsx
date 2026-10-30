@@ -26,7 +26,7 @@ export function ClassroomNode3D({ layout, space, selected, onSelect }: {
   const colors = status ? stateColors[status] : { body: '#F3F1EC', emissive: '#D6D3D1', edge: '#D6D3D1' };
   const isBot = layout.kind === 'BILL_BOT';
   const isCanteen = layout.kind === 'CANTEEN';
-  const showLabel = hovered || selected || status === 'FAULTY' || status === 'BLOCKED_PARTS';
+  const showLabel = hovered || selected || status === 'FAULTY' || status === 'DEGRADED' || status === 'BLOCKED_PARTS';
   const dimensions = useMemo<[number, number, number]>(() => isBot ? [0.72, 1.3, 0.72] : isCanteen ? [3.4, 1.3, 3] : layout.kind === 'LAB' ? [2.75, 1.55, 2.55] : [2.55, 1.7, 2.42], [isBot, isCanteen, layout.kind]);
   const targetColor = useMemo(() => new THREE.Color(colors.body), [colors.body]);
   const targetEmissive = useMemo(() => new THREE.Color(colors.emissive), [colors.emissive]);

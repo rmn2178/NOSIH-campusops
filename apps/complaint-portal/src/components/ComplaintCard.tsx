@@ -1,3 +1,4 @@
+import { forwardRef } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowUpRight, Clock3, Image as ImageIcon, LoaderCircle, MessageCircle, Users } from 'lucide-react';
 import type { Complaint } from '../api/client';
@@ -11,9 +12,14 @@ interface ComplaintCardProps {
   onComments: (complaint: Complaint) => void;
 }
 
-export function ComplaintCard({ complaint, voting, onAffected, onComments }: ComplaintCardProps) {
+// forwardRef: AnimatePresence popLayout measures this card through a ref.
+export const ComplaintCard = forwardRef<HTMLElement, ComplaintCardProps>(function ComplaintCard(
+  { complaint, voting, onAffected, onComments },
+  ref,
+) {
   return (
     <motion.article
+      ref={ref}
       layout
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
@@ -84,4 +90,4 @@ export function ComplaintCard({ complaint, voting, onAffected, onComments }: Com
       </div>
     </motion.article>
   );
-}
+});

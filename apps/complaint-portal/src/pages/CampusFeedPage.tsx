@@ -44,7 +44,9 @@ function matchesFilters(complaint: Complaint, filters: ActiveFilters, department
   if (filters.zone === 'LABS') return complaint.space_kind === 'LAB';
   if (filters.zone === 'CANTEENS') return complaint.space_kind === 'CANTEEN';
   if (filters.zone === 'BILL_BOTS') return complaint.space_kind === 'BILL_BOT';
-  return complaint.space_code.startsWith(filters.zone.slice(-1));
+  // Block filters apply to classrooms only: CAN-05 and BOT-… share the C/B
+  // initials but have their own zones above.
+  return complaint.space_kind === 'CLASSROOM' && complaint.space_code.startsWith(filters.zone.slice(-1));
 }
 
 export function CampusFeedPage() {
