@@ -292,7 +292,7 @@ the procurement funnel.
 | `verify_chat_intake.py` | draft extraction, missing-room refusal, CHAT ticket + WO, merge link, sign-in gate |
 | `verify_email_intake.py` | EMAIL_INBOX channel, reporter binding, ack log, merge without a second WO |
 | `verify_scenarios.py` | RBAC, leak/power runs, idempotency, reset, exact asset restoration |
-| `verify_pulse.py` | cron schedule, paused/cooldown/cap gates, all four facility families through the real pipeline, assign→parts→completion→twin restore, auto-heal, per-event revert, RBAC |
+| `verify_pulse.py` | cron schedule, paused/cooldown/cap gates, all four facility families forced through the real pipeline, assign→parts→completion→twin restore with priced repair, auto-heal, per-event revert, race-proof document numbers, RBAC |
 | `verify_seed_realism.py` | 36 distinct staff surnames per role with bounded repeats, 50 priced repairs spread over the last 90 days |
 | `verify_sla_integrity.py` | close/freeze on completion, reopen without double counts, defensive tick, strength revalidation |
 | `verify_asset_history.py` | 50 priced repairs, parts/labour/total reconciliation, open work order, empty record, RBAC and trigger pricing |
@@ -307,7 +307,10 @@ All print `ALL PASS` on the live project.
 
 ## 10. Operations
 
-- Migrations `0001–0033` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Migrations `0001–0034` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Document numbers (tickets, work orders, incidents) draw from one monotonic sequence with unique
+  indexes, so the campus pulse cron can never collide with an interactive session — before migration
+  `0034` a concurrent tick and submit could mint the same work-order number and price a repair at zero.
 - Vault secrets: `xai_api_key` (Groq `gsk_` keys auto-route to Groq, `xai-` to x.ai), optional
   `llm_model`, `nosih_vault_secret` for anonymous identities.
 - pg_cron jobs: `nosih-clock-tick` every minute (clock + SLA), `nosih-ai-maintenance` every minute,
