@@ -522,6 +522,21 @@ export interface StaffRankingResult {
   preflight_checks: ConstraintCheck[];
 }
 
+export interface WorkforceSkill {
+  skill: string;
+  total: number;
+  on_shift: number;
+  available: number;
+}
+
+export interface WorkforceSummary {
+  total: number;
+  on_shift: number;
+  on_leave: number;
+  available: number;
+  by_skill: WorkforceSkill[];
+}
+
 export interface PartRequest {
   sku_code: string;
   quantity: number;

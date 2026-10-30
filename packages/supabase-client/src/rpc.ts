@@ -154,6 +154,8 @@ export const rpc = {
   rankStaff: (workOrderId: number) =>
     supabase.rpc('rpc_rank_staff_for_work_order', { p_work_order_id: workOrderId }).then(unwrap),
 
+  workforceSummary: () => supabase.rpc('rpc_workforce_summary').then(unwrap),
+
   assignStaff: (
     workOrderId: number,
     staffCode: string,

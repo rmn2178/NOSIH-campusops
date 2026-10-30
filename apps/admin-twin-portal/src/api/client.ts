@@ -40,6 +40,7 @@ import type {
   TwinOverview,
   TwinSpace,
   User,
+  WorkforceSummary,
   WorkOrder,
 } from '../types';
 
@@ -836,6 +837,24 @@ export const api = {
             }))
           : [],
         preflight_checks: [],
+      };
+    },
+    workforce: async (): Promise<WorkforceSummary> => {
+      const raw = (await rpc.workforceSummary()) as Raw;
+      if (raw.error) throw new ApiError(str(raw.error), 403, raw);
+      return {
+        total: num(raw.total),
+        on_shift: num(raw.on_shift),
+        on_leave: num(raw.on_leave),
+        available: num(raw.available),
+        by_skill: Array.isArray(raw.by_skill)
+          ? (raw.by_skill as Raw[]).map((skill) => ({
+              skill: str(skill.skill),
+              total: num(skill.total),
+              on_shift: num(skill.on_shift),
+              available: num(skill.available),
+            }))
+          : [],
       };
     },
     assignStaff: async (
