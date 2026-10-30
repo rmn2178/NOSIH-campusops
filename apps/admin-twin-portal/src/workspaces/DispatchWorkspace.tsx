@@ -5,6 +5,7 @@ import { Button, ErrorBanner, PageHeader, Spinner } from '../components/ui';
 import { usePortalStore } from '../store/portalStore';
 import type { Incident, SlaClock, WorkOrder } from '../types';
 import { IncidentCorrelationDesk } from './IncidentCorrelationDesk';
+import { PulsePanel } from './PulsePanel';
 import { ScenarioLab } from './ScenarioLab';
 import { WorkOrderDispatchBoard } from './WorkOrderDispatchBoard';
 
@@ -28,5 +29,6 @@ export function DispatchWorkspace() {
   return <><PageHeader eyebrow="Workspace 02 · Response coordination" title="Incidents & work order dispatch" description="Correlate topological root causes, inspect duplicate merges, and assign constrained maintenance capacity without hiding unavailable resources." actions={<Button variant="secondary" size="sm" onClick={() => void load()}><RefreshCw className="h-3.5 w-3.5" />Refresh</Button>} />
     {error && <div className="mb-5"><ErrorBanner message={error} onRetry={() => void load()} /></div>}
     <ScenarioLab />
+    <PulsePanel />
     {loading && workOrders.length === 0 ? <Spinner label="Loading incidents and work orders" /> : <div className="grid items-start gap-5 2xl:grid-cols-2"><IncidentCorrelationDesk incidents={incidents} /><WorkOrderDispatchBoard workOrders={workOrders} slaClocks={slaClocks} onChanged={() => void load()} /></div>}</>;
 }

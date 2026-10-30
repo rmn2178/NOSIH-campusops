@@ -129,6 +129,28 @@ export const rpc = {
   resetScenario: (runId: number, email: string) =>
     supabase.rpc('rpc_reset_scenario', { p_run_id: runId, p_actor_email: email }).then(unwrap),
 
+  pulseStatus: () => supabase.rpc('rpc_pulse_status').then(unwrap),
+
+  pulseConfigure: (
+    enabled: boolean | null,
+    intervalMinutes: number | null,
+    maxOpenSimulated: number | null,
+    autoHealHours: number | null,
+  ) =>
+    supabase
+      .rpc('rpc_pulse_configure', {
+        p_enabled: enabled,
+        p_interval_minutes: intervalMinutes,
+        p_max_open_simulated: maxOpenSimulated,
+        p_auto_heal_hours: autoHealHours,
+      })
+      .then(unwrap),
+
+  pulseRunNow: () => supabase.rpc('rpc_pulse_run_now').then(unwrap),
+
+  pulseRevert: (eventId: number) =>
+    supabase.rpc('rpc_pulse_revert', { p_event_id: eventId }).then(unwrap),
+
   rankStaff: (workOrderId: number) =>
     supabase.rpc('rpc_rank_staff_for_work_order', { p_work_order_id: workOrderId }).then(unwrap),
 

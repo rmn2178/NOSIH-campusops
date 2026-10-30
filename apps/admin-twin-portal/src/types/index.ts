@@ -425,6 +425,52 @@ export interface ScenarioResult extends ScenarioSummary {
   already_reverted?: boolean;
 }
 
+export type PulseFacilityKind = 'CANTEEN' | 'BILL_BOT' | 'LAB' | 'ROOM';
+
+export interface PulseEvent {
+  id: number;
+  template_key: string;
+  facility_kind: PulseFacilityKind;
+  space_code: string;
+  ticket_number: string | null;
+  work_order_number: string | null;
+  description: string;
+  status: 'ACTIVE' | 'REVERTED' | 'COMPLETED';
+  is_anonymous: boolean;
+  reporter_email: string | null;
+  created_at: string;
+  closed_at: string | null;
+}
+
+export interface PulseStatus {
+  success: boolean;
+  error?: string;
+  enabled: boolean;
+  interval_minutes: number;
+  max_open_simulated: number;
+  auto_heal_hours: number;
+  last_injected_at: string | null;
+  last_tick_at: string | null;
+  open_simulated: number;
+  injected_24h: number;
+  healed_24h: number;
+  active_events: PulseEvent[];
+  recent_events: PulseEvent[];
+}
+
+export interface PulseInjectResult {
+  success?: boolean;
+  fired?: boolean;
+  reason?: string;
+  facility_kind?: PulseFacilityKind;
+  space_code?: string;
+  ticket_number?: string;
+  work_order_number?: string;
+  template_key?: string;
+  description?: string;
+  error?: string;
+}
+
 export interface UnavailableResource {
   code: string;
   name?: string;

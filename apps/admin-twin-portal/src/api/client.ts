@@ -29,6 +29,8 @@ import type {
   RoomOccupancy,
   ScenarioResult,
   ScenarioRun,
+  PulseInjectResult,
+  PulseStatus,
   ScenarioSummary,
   SlaClock,
   SpaceDetail,
@@ -680,6 +682,24 @@ export const api = {
       const raw = (await rpc.resetScenario(Number(runId), profile.email)) as Raw;
       return mapScenarioResult(raw);
     },
+  },
+
+  pulse: {
+    status: async (): Promise<PulseStatus> => (await rpc.pulseStatus()) as PulseStatus,
+    configure: async (patch: {
+      enabled?: boolean | null;
+      intervalMinutes?: number | null;
+      maxOpenSimulated?: number | null;
+      autoHealHours?: number | null;
+    }): Promise<Raw> =>
+      (await rpc.pulseConfigure(
+        patch.enabled ?? null,
+        patch.intervalMinutes ?? null,
+        patch.maxOpenSimulated ?? null,
+        patch.autoHealHours ?? null,
+      )) as Raw,
+    runNow: async (): Promise<PulseInjectResult> => (await rpc.pulseRunNow()) as PulseInjectResult,
+    revert: async (eventId: number): Promise<Raw> => (await rpc.pulseRevert(eventId)) as Raw,
   },
 
   clock: {
