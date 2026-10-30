@@ -521,6 +521,7 @@ export const api = {
     },
     staffRanking: async (workOrderId: string): Promise<StaffRankingResult> => {
       const raw = (await rpc.rankStaff(Number(workOrderId))) as Raw;
+      if (raw.error) throw new ApiError(str(raw.error), 403, raw);
       return {
         work_order_id: str(raw.work_order_id),
         available_ranked: Array.isArray(raw.available_ranked)
@@ -557,10 +558,30 @@ export const api = {
         preflight_checks: [],
       };
     },
-    assignStaff: async (workOrderId: string, staffCode: string, _lockId: string): Promise<WorkOrder> => {
+    assignStaff: async (
+      workOrderId: string,
+      staffCode: string,
+      _lockId: string,
+      expected?: { assigned_staff_code: string | null; reassignment_count: number },
+    ): Promise<WorkOrder> => {
       const profile = await loadProfile();
-      const result = (await rpc.assignStaff(Number(workOrderId), staffCode, profile.email, profile.role)) as Raw;
-      if (!result.success) throw new ApiError(str(result.error ?? 'Assignment failed'), 409, result);
+      const result = (await rpc.assignStaffChecked(
+        Number(workOrderId),
+        staffCode,
+        profile.email,
+        profile.role,
+        expected ?? { assigned_staff_code: null, reassignment_count: 0 },
+      )) as Raw;
+      if (!result.success) {
+        const error = str(result.error ?? 'Assignment failed');
+        throw new ApiError(
+          error === 'STALE_ASSIGNMENT'
+            ? 'Another dispatcher changed this work order. Refresh the board and retry.'
+            : error,
+          409,
+          result,
+        );
+      }
       return fetchWorkOrder(workOrderId);
     },
     partsPreflight: async (workOrderId: string): Promise<PartsPreflightResult> => {

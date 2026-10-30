@@ -106,6 +106,23 @@ export const rpc = {
       })
       .then(unwrap),
 
+  assignStaffChecked: (
+    workOrderId: number,
+    staffCode: string,
+    email: string,
+    role: string,
+    expected: { assigned_staff_code: string | null; reassignment_count: number },
+  ) =>
+    supabase
+      .rpc('rpc_assign_or_rebalance_staff_checked', {
+        p_work_order_id: workOrderId,
+        p_staff_code: staffCode,
+        p_actor_email: email,
+        p_actor_role: role,
+        p_expected: expected,
+      })
+      .then(unwrap),
+
   reserveParts: (workOrderId: number, parts: Array<{ sku_code: string; qty: number }>, email: string, role: string) =>
     supabase
       .rpc('rpc_reserve_parts_for_work_order', {

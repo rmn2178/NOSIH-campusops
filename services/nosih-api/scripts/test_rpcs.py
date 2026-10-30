@@ -19,6 +19,12 @@ def main() -> None:
         def scalar(sql: str, **params):
             return conn.execute(text(sql), params).scalar_one()
 
+        facilities_auth = scalar("select auth_user_id from public.users where email = 'facilities@nosih.edu.in'")
+        conn.execute(
+            text("select set_config('request.jwt.claims', :claims, false)"),
+            {"claims": json.dumps({"sub": str(facilities_auth), "role": "authenticated"})},
+        )
+
         inspector = scalar("select public.rpc_get_space_twin_inspector(:s)", s="C4-03")
         print("inspector:", inspector.get("code"), "assets:", len(inspector.get("assets", [])),
               "timeline:", len(inspector.get("full_day_timeline", [])),

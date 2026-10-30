@@ -137,7 +137,10 @@ export function UnavailableResourcesModal({ open, onClose, onCompleted, mode, sp
           lock_id: activeLock.id,
         });
       } else if (mode === 'staff' && workOrder) {
-        await api.operations.assignStaff(workOrder.id, resource.id, activeLock.id);
+        await api.operations.assignStaff(workOrder.id, resource.id, activeLock.id, {
+          assigned_staff_code: workOrder.assigned_staff_code ?? null,
+          reassignment_count: workOrder.reassignment_count ?? 0,
+        });
       } else if (mode === 'parts' && workOrder && partsResult) {
         const parts: PartRequest[] = partsResult.requested_parts;
         await api.operations.reserveParts(workOrder.id, parts, activeLock.id);
