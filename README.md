@@ -21,7 +21,7 @@ packages/
   supabase-client/          shared typed client: auth, RPC wrappers, realtime
 services/nosih-api/         Python seed generator, migrations runner, verification scripts
 supabase/
-  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0018)
+  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0019)
   functions/                optional Edge Functions (email webhook, SLA tick) — not required
 docs/screenshots/           reference captures
 README.md  Makefile  docker-compose.yml
@@ -229,6 +229,7 @@ the procurement funnel.
 | `verify_live_twin.py` | occupancy moves between periods; timetable consistency |
 | `verify_all.py` | bookings, analytics, chat, completion guard, Department Manager |
 | `verify_repairs.py` | repair gate, approval, parts consumption, clock coverage, exams |
+| `verify_allocation.py` | ranking fields, lock gate, assignment, lock consumption, workload |
 | `verify_chat.py` | question reaches the model, grounded codes, multi-turn, ownership guard |
 | `realistic_timetable.py` | rebuilds slots; reports collisions, load, labs |
 | `unique_student_identities.py` | unique names and `STU-…` codes per student |
@@ -239,7 +240,7 @@ All print `ALL PASS` on the live project.
 
 ## 10. Operations
 
-- Migrations `0001–0018` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Migrations `0001–0019` are applied in order with `apply_sql_file.py`; each is idempotent.
 - Vault secrets: `xai_api_key` (Groq `gsk_` keys auto-route to Groq, `xai-` to x.ai), optional
   `llm_model`, `nosih_vault_secret` for anonymous identities.
 - pg_cron jobs: `nosih-clock-tick` every minute (clock + SLA), `nosih-ai-maintenance` every minute.

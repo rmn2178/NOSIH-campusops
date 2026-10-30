@@ -282,6 +282,10 @@ export interface StaffCandidate {
   full_name: string;
   primary_skill: string;
   risk_clearance: string;
+  skill_proficiency?: number;
+  is_on_shift?: boolean;
+  is_on_leave?: boolean;
+  current_block_location?: string;
   current_active_jobs: number;
   max_concurrent_jobs: number;
   score: number;

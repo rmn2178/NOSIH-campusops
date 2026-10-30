@@ -529,6 +529,18 @@ export const api = {
               full_name: str(candidate.full_name),
               primary_skill: str(candidate.primary_skill),
               risk_clearance: str(candidate.risk_clearance ?? 'STANDARD'),
+              skill_proficiency: candidate.skill_proficiency === null || candidate.skill_proficiency === undefined
+                ? undefined
+                : num(candidate.skill_proficiency),
+              is_on_shift: candidate.is_on_shift === null || candidate.is_on_shift === undefined
+                ? undefined
+                : Boolean(candidate.is_on_shift),
+              is_on_leave: candidate.is_on_leave === null || candidate.is_on_leave === undefined
+                ? undefined
+                : Boolean(candidate.is_on_leave),
+              current_block_location: candidate.current_block_location
+                ? str(candidate.current_block_location)
+                : undefined,
               current_active_jobs: num(candidate.current_active_jobs),
               max_concurrent_jobs: num(candidate.max_concurrent_jobs),
               score: num(candidate.score),
