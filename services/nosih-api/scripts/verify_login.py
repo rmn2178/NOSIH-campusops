@@ -8,10 +8,14 @@ import json
 import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 
-sys.path.insert(0, ".")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.config import settings  # noqa: E402
+from _db import enable_utf8_stdout  # noqa: E402
+
+enable_utf8_stdout()
 
 EMAIL = sys.argv[1] if len(sys.argv) > 1 else "sysadmin@nosih.edu.in"
 PASSWORD = "Nosih@2026"

@@ -3,28 +3,7 @@
 Read-only. Prints ALL PASS when the live project satisfies every rule.
 """
 
-from urllib.parse import urlsplit, urlunsplit
-
-import psycopg
-from dotenv import load_dotenv
-
-import os
-
-
-def connect() -> psycopg.Connection:
-    load_dotenv("services/nosih-api/.env")
-    url = os.environ["DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
-    try:
-        return psycopg.connect(url, connect_timeout=8)
-    except psycopg.OperationalError:
-        parts = urlsplit(url)
-        proj = (parts.hostname or "").removeprefix("db.").removesuffix(".supabase.co")
-        netloc = f"postgres.{proj}:{parts.password}@aws-0-eu-west-1.pooler.supabase.com:{parts.port or 5432}"
-        return psycopg.connect(
-            urlunsplit((parts.scheme, netloc, parts.path, parts.query, "")),
-            connect_timeout=10,
-            sslmode="require",
-        )
+from _db import connect
 
 
 def main() -> None:

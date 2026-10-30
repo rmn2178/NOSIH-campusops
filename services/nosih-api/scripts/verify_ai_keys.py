@@ -4,12 +4,9 @@ Run with the project virtualenv from services/nosih-api:
   .venv/Scripts/python.exe scripts/verify_ai_keys.py
 """
 
-import os
 import sys
-from urllib.parse import urlsplit, urlunsplit
 
-import psycopg
-from dotenv import load_dotenv
+from _db import connect
 
 failures: list[str] = []
 
@@ -18,20 +15,6 @@ def check(label: str, passed: bool, detail: object = "") -> None:
     print(("PASS  " if passed else "FAIL  ") + label + (f"  -> {detail}" if detail != "" else ""))
     if not passed:
         failures.append(label)
-
-
-def connect():
-    load_dotenv("services/nosih-api/.env")
-    load_dotenv(".env")
-    url = os.environ["DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
-    try:
-        return psycopg.connect(url, connect_timeout=8)
-    except psycopg.OperationalError:
-        parts = urlsplit(url)
-        proj = (parts.hostname or "").removeprefix("db.").removesuffix(".supabase.co")
-        netloc = f"postgres.{proj}:{parts.password}@aws-0-eu-west-1.pooler.supabase.com:{parts.port or 5432}"
-        return psycopg.connect(urlunsplit((parts.scheme, netloc, parts.path, parts.query, "")),
-                               connect_timeout=10, sslmode="require")
 
 
 def main() -> None:

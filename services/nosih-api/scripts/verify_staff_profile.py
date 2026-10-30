@@ -4,27 +4,11 @@ Runs in a transaction and rolls back. Prints ALL PASS.
 """
 
 import json
-import os
-from urllib.parse import urlsplit, urlunsplit
 
-import psycopg
-from dotenv import load_dotenv
+from _db import connect
 
 ADMIN_UUID = "4642ba88-5b19-458e-b9c0-84e70e04f060"
 STUDENT_UUID = "00000000-0000-0000-0000-000000000099"
-
-
-def connect():
-    load_dotenv("services/nosih-api/.env")
-    url = os.environ["DATABASE_URL"].replace("postgresql+psycopg://", "postgresql://", 1)
-    try:
-        return psycopg.connect(url, connect_timeout=8)
-    except psycopg.OperationalError:
-        parts = urlsplit(url)
-        proj = (parts.hostname or "").removeprefix("db.").removesuffix(".supabase.co")
-        netloc = f"postgres.{proj}:{parts.password}@aws-0-eu-west-1.pooler.supabase.com:{parts.port or 5432}"
-        return psycopg.connect(urlunsplit((parts.scheme, netloc, parts.path, parts.query, "")),
-                               connect_timeout=10, sslmode="require")
 
 
 failures = []

@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: Typecheck and build portals
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+  api:
+    name: API tests and offline seed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: services/nosih-api/pyproject.toml
+      - run: pip install -e "./services/nosih-api[test]"
+      - name: Unit tests
+        working-directory: services/nosih-api
+        run: python -m pytest -q
+      - name: Offline seed and audit chain
+        working-directory: services/nosih-api
+        run: python scripts/verify_phase1.py
+
+  live:
+    name: Live Supabase verification (manual)
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: services/nosih-api/pyproject.toml
+      - run: pip install -e "./services/nosih-api[test]"
+      - name: Verify live read and write paths
+        if: env.DATABASE_URL != ''
+        working-directory: services/nosih-api
+        run: python scripts/verify_all.py
+      - name: Explain skipped live gate
+        if: env.DATABASE_URL == ''
+        run: echo "::notice::DATABASE_URL secret is not configured, so the live verification gate was skipped."

@@ -1,27 +1,38 @@
-PYTHON := services/nosih-api/.venv/bin/python
-PIP := services/nosih-api/.venv/bin/pip
+ifeq ($(OS),Windows_NT)
+VENV_BIN := Scripts
+else
+VENV_BIN := bin
+endif
 
-.PHONY: install seed migrate verify dev-api dev-complaint dev-admin test build
+PYTHON := .venv/$(VENV_BIN)/python
+PIP := .venv/$(VENV_BIN)/pip
+ALEMBIC := .venv/$(VENV_BIN)/alembic
+UVICORN := .venv/$(VENV_BIN)/uvicorn
+
+.PHONY: install seed migrate verify verify-live dev-api dev-complaint dev-admin test build
 
 install:
-	test -x $(PYTHON) || python3.11 -m venv services/nosih-api/.venv
-	$(PIP) install -e services/nosih-api
+	test -x services/nosih-api/$(PYTHON) || python -m venv services/nosih-api/.venv
+	cd services/nosih-api && $(PIP) install -e ".[test]"
 	npm install
 
 seed:
-	cd services/nosih-api && .venv/bin/python -m app.seed.seed_campus
+	cd services/nosih-api && $(PYTHON) -m app.seed.seed_campus
 
 migrate:
-	cd services/nosih-api && .venv/bin/alembic upgrade head
+	cd services/nosih-api && $(ALEMBIC) upgrade head
 
 verify:
-	cd services/nosih-api && .venv/bin/python -c "import runpy; runpy.run_path('scripts/verify_phase1.py', run_name='__main__')"
+	cd services/nosih-api && $(PYTHON) scripts/verify_phase1.py
+
+verify-live:
+	cd services/nosih-api && $(PYTHON) scripts/verify_all.py
 
 test:
-	cd services/nosih-api && .venv/bin/python -m pytest -q
+	cd services/nosih-api && $(PYTHON) -m pytest -q
 
 dev-api:
-	cd services/nosih-api && .venv/bin/uvicorn app.main:app --reload --port 8000
+	cd services/nosih-api && $(UVICORN) app.main:app --reload --port 8000
 
 dev-complaint:
 	npm run dev:complaint

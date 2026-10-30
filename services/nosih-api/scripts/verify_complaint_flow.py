@@ -13,6 +13,9 @@ import psycopg
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.config import settings  # noqa: E402
+from _db import enable_utf8_stdout  # noqa: E402
+
+enable_utf8_stdout()
 
 STUDENT_UUID = "1fe499e7-739a-46e1-a8c3-ee1c82dfcb9e"
 SPACE = "A1-02"

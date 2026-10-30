@@ -325,6 +325,23 @@ the procurement funnel.
 
 All print `ALL PASS` on the live project.
 
+Every script resolves `services/nosih-api/.env` from its own location, so it behaves the same whether
+launched from the repository root, from `services/nosih-api`, or from CI (they previously needed the
+service directory *and* an exported `DATABASE_URL`).
+
+### Continuous integration
+
+`.github/workflows/ci.yml` runs on every push to `main`, every pull request, and on demand:
+
+| Job | What it proves |
+|---|---|
+| `web` | `npm ci`, TypeScript typecheck for both portals, production build |
+| `api` | API unit tests, offline 27-table seed and SHA-256 audit chain (`verify_phase1.py`) |
+| `live` | manual only: runs `verify_all.py` against the project when the `DATABASE_URL` secret exists |
+
+The live job is read/write but rolls every mutation back; add `DATABASE_URL` as a repository secret to
+enable it. Without the secret the job passes with a notice instead of failing.
+
 ---
 
 ## 10. Operations
