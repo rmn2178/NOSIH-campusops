@@ -45,6 +45,8 @@ README.md  Makefile  docker-compose.yml
 | `src/workspaces/ExternalIntegrationsConsole.tsx` | simulated inbox + notification log |
 | `src/workspaces/AuditChainLedgerView.tsx` | append-only audit stream |
 | `src/workspaces/IncidentCorrelationDesk.tsx` | correlated incidents |
+| `src/workspaces/ScenarioLab.tsx` | replayable water-leak / power-fault disruptions |
+| `src/workspaces/PulsePanel.tsx` | campus pulse status, Run now, Pause, cadence, auto-heal, revert |
 | `src/workspaces/AnalyticsWorkspace.tsx` | pipeline, SLA, utilisation, shortages, recurrence |
 | `src/components/layout/AppShell.tsx` | navigation, live badge, clock, role labels |
 | `src/components/layout/AssistantDock.tsx` | workspace-aware twin assistant |
@@ -102,7 +104,7 @@ actor from `auth.uid()`.
 
 ---
 
-## 3. Data model (36 tables)
+## 3. Data model (37 tables)
 
 **Campus** — `buildings` (5), `floors` (15), `distribution_boards` (30), `rooms` (90), `labs` (20),
 `canteens` (5), `bill_bots` (8), `assets` (2,748), `departments` (6).
@@ -114,13 +116,18 @@ actor from `auth.uid()`.
 **People** — `staff_profiles` (172, skills, risk clearance, shift, load), `users` (auth-linked when a
 login exists).
 
-**Operations** — `complaints` (84), `complaint_comments`, `complaint_votes`, `identity_vault`,
-`work_orders` (63), `incidents`, `maintenance_history` (50), `part_reservations`, `inventory_items`
-(30 SKUs), `purchase_requests` (25), `repair_approvals`, `room_bookings`, `resource_locks`.
+**Operations** — `complaints` (90), `complaint_comments`, `complaint_votes`, `identity_vault`,
+`work_orders` (69), `incidents`, `maintenance_history` (50, spread over the last 90 days),
+`part_reservations`, `inventory_items` (30 SKUs), `purchase_requests` (25), `repair_approvals`,
+`room_bookings`, `resource_locks`.
 
-**Time** — `sla_clocks` (63, one per work order), `campus_clock_state` (live IST period).
+**Time** — `sla_clocks` (69, one per work order), `campus_clock_state` (live IST period).
 
-**Governance** — `audit_logs` (164), `notification_logs`, `ai_jobs`, `ai_chat_messages`.
+**Governance** — `audit_logs` (201), `notification_logs`, `ai_jobs`, `ai_chat_messages`.
+
+**Simulation** — `scenario_runs` (2), `simulation_config` (single row: enabled, cadence, open-fault cap,
+auto-heal window), `simulation_events` (one ledger row per pulse injection: template, facility, prior
+asset states, ticket/work-order/SLA links, ACTIVE → COMPLETED/REVERTED).
 
 Each room owns 22 assets; every space is addressable by a canonical code (`C4-03`, `LAB-OOPS-02`,
 `CAN-05`, `BOT-03`), so a natural-language report resolves to exactly one twin node.
@@ -146,6 +153,9 @@ Each room owns 22 assets; every space is addressable by a canonical code (`C4-03
 **AI** — `rpc_ai_chat`, `rpc_ai_chat_history`, `rpc_chat_intake`, `nosih_ai_run_intake`,
 `nosih_apply_complaint_ai`, `nosih_hold_complaint`, `nosih_ai_moderate_text`, `nosih_ai_analyse_complaint`.
 **Analytics** — `rpc_analytics_overview`.
+**Simulation** — `rpc_run_scenario`, `rpc_reset_scenario`, `rpc_list_scenarios`, `rpc_pulse_tick`,
+`rpc_pulse_status`, `rpc_pulse_configure`, `rpc_pulse_run_now`, `rpc_pulse_revert`,
+`nosih_pulse_inject`, `nosih_pulse_heal`.
 **Identity** — `rpc_seal_identity_in_vault`, `rpc_break_glass_unseal_identity`, `rpc_verify_audit_chain`,
 `nosih_actor_email/role/id`, `nosih_append_audit`.
 
@@ -218,6 +228,17 @@ live classroom and a lab power fault. Each run creates a real complaint, work or
 damages the twin, and records the exact prior room/asset state. Runs are idempotent and can be reverted
 to their pre-run state, so the same demo can be delivered twice.
 
+**Campus pulse** — a pg_cron heartbeat (`nosih-campus-pulse`, every minute) keeps the campus alive
+between demos. On its cadence (default 15 minutes, at most 3 open simulated faults, auto-heal off by
+default) it injects a real fault through the unmodified intake pipeline: weighted sampling across
+canteen appliances, bill-dispatch bots, labs and classrooms, meal-window and class-hour description
+templates, random active student reporters with 35% anonymous submissions. Each injection records the
+prior twin state in `simulation_events`, so it can be reverted exactly — complaint resolved, work order
+cancelled, SLA paused, assets and bot paper/queue restored. An optional auto-heal window auto-assigns a
+qualified on-shift technician and completes the repair once a work order ages past the threshold.
+Privileged admins control everything from the dispatch panel (Run now, Pause, cadence, auto-heal,
+Revert); other roles see nothing.
+
 **SLA** — a minute cron syncs the IST clock and accrues active minutes, emits 75% warnings and tiered
 breach notifications, and pauses clocks for parts. Resolving a complaint or completing its work order
 closes the clock; reopening the complaint reopens the work order and the clock from "now"; the cron
@@ -271,6 +292,8 @@ the procurement funnel.
 | `verify_chat_intake.py` | draft extraction, missing-room refusal, CHAT ticket + WO, merge link, sign-in gate |
 | `verify_email_intake.py` | EMAIL_INBOX channel, reporter binding, ack log, merge without a second WO |
 | `verify_scenarios.py` | RBAC, leak/power runs, idempotency, reset, exact asset restoration |
+| `verify_pulse.py` | cron schedule, paused/cooldown/cap gates, all four facility families through the real pipeline, assign→parts→completion→twin restore, auto-heal, per-event revert, RBAC |
+| `verify_seed_realism.py` | 36 distinct staff surnames per role with bounded repeats, 50 priced repairs spread over the last 90 days |
 | `verify_sla_integrity.py` | close/freeze on completion, reopen without double counts, defensive tick, strength revalidation |
 | `verify_asset_history.py` | 50 priced repairs, parts/labour/total reconciliation, open work order, empty record, RBAC and trigger pricing |
 | `verify_rbac_matrix.py` | 8 role sign-ins, department-scoped work orders/SLA/PRs, audit and directory lockdown, forged-email denial, cross-department approval, self-approval |
@@ -284,10 +307,14 @@ All print `ALL PASS` on the live project.
 
 ## 10. Operations
 
-- Migrations `0001–0032` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Migrations `0001–0033` are applied in order with `apply_sql_file.py`; each is idempotent.
 - Vault secrets: `xai_api_key` (Groq `gsk_` keys auto-route to Groq, `xai-` to x.ai), optional
   `llm_model`, `nosih_vault_secret` for anonymous identities.
-- pg_cron jobs: `nosih-clock-tick` every minute (clock + SLA), `nosih-ai-maintenance` every minute.
+- pg_cron jobs: `nosih-clock-tick` every minute (clock + SLA), `nosih-ai-maintenance` every minute,
+  `nosih-campus-pulse` every minute (cadence-gated injections and optional auto-heal).
+- Seed realism polish (already applied to the live project): `f4_diversify_names.sql` reassigns
+  faculty/lab-staff surnames across a 36-name pool, `f4_history_spread.sql` spreads the 50 priced
+  maintenance records across the last 90 days.
 - Real edge cases: outside 09:00–15:00 IST the clock pins to P1; weekends freeze; scrubbing sets the
   clock to MANUAL until `rpc_set_clock_mode('LIVE')`.
 - Rotate any key or access token pasted into a chat.
