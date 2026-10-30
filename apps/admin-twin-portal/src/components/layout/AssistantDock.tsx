@@ -50,7 +50,13 @@ export function AssistantDock() {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const prompts = useMemo(() => SUGGESTIONS[workspace] ?? SUGGESTIONS.twin, [workspace]);
+  const prompts = useMemo(
+    () => [
+      ...(selectedSpaceCode ? [`Find a relocation room for ${selectedSpaceCode}`] : []),
+      ...(SUGGESTIONS[workspace] ?? SUGGESTIONS.twin),
+    ],
+    [selectedSpaceCode, workspace],
+  );
 
   useEffect(() => {
     if (open) window.setTimeout(() => inputRef.current?.focus(), 60);
