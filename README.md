@@ -398,4 +398,9 @@ npm run dev:admin          # http://localhost:5174
 
 Portal env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. Server secrets stay in Vault.
 Sign in with a seeded student (`aids1a01@nosih.edu.in`), a department manager (`hod.cse@nosih.edu.in`)
-or an admin account; the seeded password is managed outside the repository.
+or an admin account (`facilities@nosih.edu.in`); the demo password is shown on the login screen.
+Rotate it and disable the demo accounts before exposing a public deployment.
+
+`vercel/` is a self-contained copy of the complaint portal for upload to Vercel. It has its own
+`package.json`, lockfile, env template and `vercel.json`, runs on port 5180, and is built by CI;
+deployment steps are in `vercel/README.md`.
