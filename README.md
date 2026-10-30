@@ -346,6 +346,10 @@ enable it. Without the secret the job passes with a notice instead of failing.
 
 ## 10. Operations
 
+- Portal speed: the profile and the last feed snapshot paint from storage before the network
+  refresh; secondary pages and every admin workspace are lazy chunks (the sign-in gate no longer
+  downloads three.js or recharts); the Vite config preconnects to `VITE_SUPABASE_URL` and an
+  expired token now returns the shell to the sign-in gate instead of leaving panels on silent 401s.
 - Migrations `0001–0044` are applied in order with `apply_sql_file.py`; each is idempotent.
 - Document numbers (tickets, work orders, incidents) draw from one monotonic sequence with unique
   indexes, so the campus pulse cron can never collide with an interactive session — before migration

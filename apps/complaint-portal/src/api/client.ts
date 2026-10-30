@@ -251,6 +251,24 @@ export async function restoreSession(): Promise<LoginResponse | null> {
   }
 }
 
+/** Local Supabase session read (no network). */
+export async function readSessionToken(): Promise<string | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session?.access_token ?? null;
+}
+
+let profileInFlight: Promise<SessionProfile> | null = null;
+
+/** Refresh the signed-in profile without blocking the first paint. */
+export async function readProfile(): Promise<SessionProfile> {
+  if (!profileInFlight) {
+    profileInFlight = (async () => mapProfile(await loadProfile()))().finally(() => {
+      profileInFlight = null;
+    });
+  }
+  return profileInFlight;
+}
+
 function mapProfile(raw: Record<string, unknown>): SessionProfile {
   const year = typeof raw.year_number === 'number' ? raw.year_number : null;
   const isStudent = raw.role === 'STUDENT';
@@ -357,6 +375,8 @@ function mapSpace(raw: Record<string, unknown>): SpaceDetails {
       : [],
   };
 }
+
+let complaintsInFlight: { key: string; promise: Promise<Complaint[]> } | null = null;
 
 export const api = {
   login: async (body: LoginRequest): Promise<LoginResponse> => {
@@ -470,6 +490,7 @@ export const api = {
       };
     }
     const complaint = mapComplaint(data.complaint as Record<string, unknown>);
+    complaintsInFlight = null;
     return {
       moderation_status: 'APPROVED',
       complaint,
@@ -494,15 +515,24 @@ export const api = {
     return { complaint, first_response: (data.first_response as FirstResponse) ?? complaint.first_response! };
   },
 
-  listComplaints: async (filters: ComplaintFilters, _signal?: AbortSignal): Promise<Complaint[]> => {
-    const rows = (await rpc.listComplaints({
-      zone: filters.zone ?? 'ALL',
-      status: filters.status && filters.status !== 'ALL' ? filters.status : null,
-      category: filters.category && filters.category !== 'ALL' ? filters.category : null,
-      mine: Boolean(filters.my_department),
-      limit: 100,
-    })) as Array<Record<string, unknown>>;
-    return rows.map(mapComplaint);
+  listComplaints: (filters: ComplaintFilters, _signal?: AbortSignal): Promise<Complaint[]> => {
+    const key = JSON.stringify([filters.zone, filters.status, filters.category, Boolean(filters.my_department)]);
+    if (complaintsInFlight?.key === key) return complaintsInFlight.promise;
+    let promise: Promise<Complaint[]>;
+    promise = (async () => {
+      const rows = (await rpc.listComplaints({
+        zone: filters.zone ?? 'ALL',
+        status: filters.status && filters.status !== 'ALL' ? filters.status : null,
+        category: filters.category && filters.category !== 'ALL' ? filters.category : null,
+        mine: Boolean(filters.my_department),
+        limit: 100,
+      })) as Array<Record<string, unknown>>;
+      return rows.map(mapComplaint);
+    })().finally(() => {
+      if (complaintsInFlight?.promise === promise) complaintsInFlight = null;
+    });
+    complaintsInFlight = { key, promise };
+    return promise;
   },
 
   getComplaint: async (complaintId: string): Promise<Complaint> => {

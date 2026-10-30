@@ -88,6 +88,37 @@ async function loadProfile() {
   return cachedProfile;
 }
 
+let meInFlight: Promise<User> | null = null;
+
+function loadMe(): Promise<User> {
+  if (!meInFlight) {
+    meInFlight = (async () => {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session.session) throw new ApiError('Unauthorized', 401, null);
+      const { data, error } = await supabase.rpc('rpc_my_profile');
+      if (error || !data) throw new ApiError(error?.message ?? 'Profile not found', 401, null);
+      const raw = data as Raw;
+      cachedProfile = {
+        email: str(raw.email),
+        full_name: str(raw.full_name),
+        role: mapRole(str(raw.role)),
+        staff_code: raw.staff_code ? str(raw.staff_code) : null,
+      };
+      return {
+        id: str(raw.id),
+        email: str(raw.email),
+        full_name: str(raw.full_name),
+        role: cachedProfile.role,
+        department_code: raw.department_code ? str(raw.department_code) : undefined,
+        staff_code: cachedProfile.staff_code ?? undefined,
+      };
+    })().finally(() => {
+      meInFlight = null;
+    });
+  }
+  return meInFlight;
+}
+
 function mapTwinSpace(raw: Raw): TwinSpace {
   return {
     code: str(raw.code),
@@ -592,27 +623,7 @@ export const api = {
       const user = await api.auth.me();
       return { access_token: data.session?.access_token ?? '', token_type: 'bearer', user };
     },
-    me: async (): Promise<User> => {
-      const { data: session } = await supabase.auth.getSession();
-      if (!session.session) throw new ApiError('Unauthorized', 401, null);
-      const { data, error } = await supabase.rpc('rpc_my_profile');
-      if (error || !data) throw new ApiError(error?.message ?? 'Profile not found', 401, null);
-      const raw = data as Raw;
-      cachedProfile = {
-        email: str(raw.email),
-        full_name: str(raw.full_name),
-        role: mapRole(str(raw.role)),
-        staff_code: raw.staff_code ? str(raw.staff_code) : null,
-      };
-      return {
-        id: str(raw.id),
-        email: str(raw.email),
-        full_name: str(raw.full_name),
-        role: cachedProfile.role,
-        department_code: raw.department_code ? str(raw.department_code) : undefined,
-        staff_code: cachedProfile.staff_code ?? undefined,
-      };
-    },
+    me: (): Promise<User> => loadMe(),
   },
 
   twin: {

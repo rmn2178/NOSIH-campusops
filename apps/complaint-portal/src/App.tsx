@@ -1,11 +1,19 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { PortalLayout } from './components/PortalLayout';
 import { CampusFeedPage } from './pages/CampusFeedPage';
-import { ComplaintDetailPage } from './pages/ComplaintDetailPage';
 import { LoginGatewayPage } from './pages/LoginGatewayPage';
-import { NewComplaintPage } from './pages/NewComplaintPage';
 import { useAuthStore } from './store/useAuthStore';
+
+const NewComplaintPage = lazy(() => import('./pages/NewComplaintPage').then((module) => ({ default: module.NewComplaintPage })));
+const ComplaintDetailPage = lazy(() => import('./pages/ComplaintDetailPage').then((module) => ({ default: module.ComplaintDetailPage })));
+
+const pageFallback = (
+  <div className="flex min-h-[50vh] items-center justify-center gap-3 text-sm text-stone" role="status">
+    <span className="h-6 w-6 animate-spin rounded-full border-2 border-stitch border-t-ink" />
+    <span className="sr-only">Loading view</span>
+  </div>
+);
 
 function ProtectedApp() {
   const token = useAuthStore((state) => state.token);
@@ -35,8 +43,8 @@ export default function App() {
       <Route path="/login" element={<LoginGatewayPage />} />
       <Route element={<ProtectedApp />}>
         <Route path="/feed" element={<CampusFeedPage />} />
-        <Route path="/complaints/new" element={<NewComplaintPage />} />
-        <Route path="/complaints/:complaintId" element={<ComplaintDetailPage />} />
+        <Route path="/complaints/new" element={<Suspense fallback={pageFallback}><NewComplaintPage /></Suspense>} />
+        <Route path="/complaints/:complaintId" element={<Suspense fallback={pageFallback}><ComplaintDetailPage /></Suspense>} />
       </Route>
       <Route path="*" element={<Navigate to="/feed" replace />} />
     </Routes>

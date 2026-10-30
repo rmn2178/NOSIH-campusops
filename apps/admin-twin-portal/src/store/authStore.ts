@@ -36,6 +36,18 @@ export const useAuthStore = create<AuthState>()(persist((set, get) => ({
     }
   },
   restore: async () => {
+    const cached = get().user;
+    // A persisted session paints the command centre immediately; the profile
+    // refresh below only confirms it. Blocking here cost a full RPC per reload.
+    if (cached && get().token) {
+      set({ initializing: false });
+      try {
+        set({ user: await api.auth.me(), error: null });
+      } catch {
+        // Keep the cached session; a real 401 clears it via the auth event.
+      }
+      return;
+    }
     set({ initializing: true });
     try {
       const user = await api.auth.me();

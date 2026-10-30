@@ -36,6 +36,31 @@ interface ActiveFilters {
 
 const initialFilters: ActiveFilters = { zone: 'ALL', status: 'ALL', category: 'ALL', myDepartment: false };
 
+const FEED_CACHE = 'nosih.feed.snapshot.v1';
+const filterKey = (filters: ActiveFilters) => JSON.stringify([
+  filters.zone, filters.status, filters.category, filters.myDepartment,
+]);
+
+function readFeedCache(filters: ActiveFilters): Complaint[] | null {
+  try {
+    const raw = sessionStorage.getItem(FEED_CACHE);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { key?: string; rows?: Complaint[] };
+    if (parsed.key !== filterKey(filters) || !Array.isArray(parsed.rows)) return null;
+    return parsed.rows;
+  } catch {
+    return null;
+  }
+}
+
+function writeFeedCache(filters: ActiveFilters, rows: Complaint[]) {
+  try {
+    sessionStorage.setItem(FEED_CACHE, JSON.stringify({ key: filterKey(filters), rows }));
+  } catch {
+    // Storage full or disabled; the live fetch remains the source of truth.
+  }
+}
+
 function matchesFilters(complaint: Complaint, filters: ActiveFilters, department?: string): boolean {
   if (filters.status !== 'ALL' && complaint.status !== filters.status) return false;
   if (filters.category !== 'ALL' && complaint.category !== filters.category) return false;
@@ -75,6 +100,7 @@ export function CampusFeedPage() {
         my_department: filters.myDepartment,
       });
       setComplaints(results);
+      writeFeedCache(filters, results);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Unable to load the campus feed.');
     } finally {
@@ -86,6 +112,18 @@ export function CampusFeedPage() {
   useEffect(() => {
     void loadComplaints();
   }, [loadComplaints]);
+
+  // Paint the last snapshot instantly, then let the live fetch replace it.
+  const bootstrapped = useRef(false);
+  useEffect(() => {
+    if (bootstrapped.current) return;
+    bootstrapped.current = true;
+    const cached = readFeedCache(initialFilters);
+    if (cached?.length) {
+      setComplaints(cached);
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setClockTick((tick) => tick + 1), 60_000);
