@@ -9,11 +9,8 @@ import json
 import sys
 from pathlib import Path
 
-import psycopg
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.config import settings  # noqa: E402
-from _db import enable_utf8_stdout  # noqa: E402
+from _db import connect, enable_utf8_stdout  # noqa: E402
 
 enable_utf8_stdout()
 
@@ -34,8 +31,7 @@ def check(label: str, condition: bool, detail: object = "") -> None:
 
 
 def main() -> None:
-    url = settings.database_url.replace("postgresql+psycopg://", "postgresql://")
-    with psycopg.connect(url) as conn:
+    with connect() as conn:
         cur = conn.cursor()
         cur.execute("select set_config('request.jwt.claims', %s, false)",
                     (json.dumps({"sub": STUDENT_UUID, "role": "authenticated"}),))

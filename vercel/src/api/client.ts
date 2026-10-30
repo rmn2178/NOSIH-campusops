@@ -525,7 +525,7 @@ export const api = {
         status: filters.status && filters.status !== 'ALL' ? filters.status : null,
         category: filters.category && filters.category !== 'ALL' ? filters.category : null,
         mine: Boolean(filters.my_department),
-        limit: 100,
+        limit: 10,
       })) as Array<Record<string, unknown>>;
       return rows.map(mapComplaint);
     })().finally(() => {

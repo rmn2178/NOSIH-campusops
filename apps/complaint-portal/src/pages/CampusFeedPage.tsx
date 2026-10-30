@@ -47,7 +47,7 @@ function readFeedCache(filters: ActiveFilters): Complaint[] | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { key?: string; rows?: Complaint[] };
     if (parsed.key !== filterKey(filters) || !Array.isArray(parsed.rows)) return null;
-    return parsed.rows;
+    return parsed.rows.slice(0, 10);
   } catch {
     return null;
   }

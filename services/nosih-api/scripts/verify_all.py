@@ -5,10 +5,8 @@ import json
 import sys
 from pathlib import Path
 
-import psycopg
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.config import settings  # noqa: E402
+from _db import connect  # noqa: E402
 
 STUDENT = "1fe499e7-739a-46e1-a8c3-ee1c82dfcb9e"
 ADMIN = "4642ba88-5b19-458e-b9c0-84e70e04f060"
@@ -29,8 +27,7 @@ def as_user(cur, uuid: str) -> None:
 
 
 def main() -> None:
-    url = settings.database_url.replace("postgresql+psycopg://", "postgresql://")
-    with psycopg.connect(url) as conn:
+    with connect() as conn:
         cur = conn.cursor()
 
         cur.execute("select count(*) from public.notification_logs")
