@@ -84,6 +84,40 @@ export const rpc = {
       })
       .then(unwrap),
 
+  createBooking: (params: {
+    spaceCode: string;
+    startsAt: string;
+    endsAt: string;
+    purpose: string;
+    classCode?: string | null;
+    email: string;
+    requestKey?: string | null;
+  }) =>
+    supabase
+      .rpc('rpc_create_booking', {
+        p_space_code: params.spaceCode,
+        p_starts_at: params.startsAt,
+        p_ends_at: params.endsAt,
+        p_purpose: params.purpose,
+        p_class_code: params.classCode ?? null,
+        p_actor_email: params.email,
+        p_request_key: params.requestKey ?? null,
+      })
+      .then(unwrap),
+
+  cancelBooking: (bookingId: number, email: string) =>
+    supabase
+      .rpc('rpc_cancel_booking', { p_booking_id: bookingId, p_actor_email: email })
+      .then(unwrap),
+
+  listBookings: (from: string, limit = 50) =>
+    supabase.rpc('rpc_list_bookings', { p_from: from, p_limit: limit }).then(unwrap),
+
+  roomOccupancy: (spaceCode: string, from: string, to: string) =>
+    supabase
+      .rpc('rpc_get_room_occupancy', { p_space_code: spaceCode, p_from: from, p_to: to })
+      .then(unwrap),
+
   rankStaff: (workOrderId: number) =>
     supabase.rpc('rpc_rank_staff_for_work_order', { p_work_order_id: workOrderId }).then(unwrap),
 

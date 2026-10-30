@@ -21,7 +21,7 @@ packages/
   supabase-client/          shared typed client: auth, RPC wrappers, realtime
 services/nosih-api/         Python seed generator, migrations runner, verification scripts
 supabase/
-  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0020)
+  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0021)
   functions/                optional Edge Functions (email webhook, SLA tick) — not required
 docs/screenshots/           reference captures
 README.md  Makefile  docker-compose.yml
@@ -135,7 +135,8 @@ Each room owns 22 assets; every space is addressable by a canonical code (`C4-03
 `rpc_assign_or_rebalance_staff`, `rpc_trigger_staff_shift_change`, `rpc_claim_resource_lock`,
 `rpc_release_resource_lock`.
 **Scheduling** — `rpc_get_room_relocation_candidates`, `rpc_execute_room_relocation`,
-`rpc_create_booking`, `rpc_cancel_booking`, `rpc_list_bookings`.
+`rpc_create_booking`, `rpc_cancel_booking`, `rpc_list_bookings`, `rpc_get_room_occupancy`,
+`nosih_booking_conflicts`, `nosih_booking_alternatives`.
 **Stock & money** — `rpc_parts_preflight`, `rpc_reserve_parts_for_work_order`, `rpc_purchase_preflight`,
 `rpc_decide_purchase_request`, `rpc_receive_purchase_request_stock`, `rpc_approve_repair`,
 `rpc_complete_work_order`, `rpc_update_complaint_status`.
@@ -193,7 +194,12 @@ Completion consumes reservations and decrements stock exactly once.
 require `rpc_approve_repair` before completion.
 
 **Bookings** — `room_bookings` carries a GiST exclusion constraint on `(space_code, tstzrange)`, so
-double booking fails in storage. The RPC returns `DOUBLE_BOOKED` with three healthy alternatives.
+double booking fails in storage. Before that, the RPC checks live timetable sessions and exams, rejects
+over-capacity classes, refuses unhealthy rooms, and returns three genuinely free alternatives. Cancelling
+is owner-only (or Facilities/System admin, or a Department Manager in the owner's department) and
+idempotent; a client `request_key` makes network retries safe. The twin inspector mounts the calendar:
+six period cells show class/exam/booking occupancy, the form books a window, conflicts list the owner and
+one-click alternatives, and active bookings can be cancelled in place.
 
 **Relocation** — ranks healthy, unoccupied, unlocked rooms by building/floor proximity, refuses
 smart-board-less rooms, rewrites the timetable slot, notifies the class advisor.
@@ -228,6 +234,7 @@ the procurement funnel.
 | `verify_complaint_flow.py` | intake → AI → work order → SLA → twin → audit, rolled back |
 | `verify_live_twin.py` | occupancy moves between periods; timetable consistency |
 | `verify_all.py` | bookings, analytics, chat, completion guard, Department Manager |
+| `verify_booking.py` | class/exam conflicts, double booking, capacity, ownership, idempotency, audit |
 | `verify_repairs.py` | repair gate, approval, parts consumption, clock coverage, exams |
 | `verify_allocation.py` | ranking fields, lock gate, assignment, lock consumption, workload |
 | `verify_dispatch_guard.py` | caller-aware locks, stale assignment, rank RBAC, self-only claims |
@@ -241,7 +248,7 @@ All print `ALL PASS` on the live project.
 
 ## 10. Operations
 
-- Migrations `0001–0020` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Migrations `0001–0021` are applied in order with `apply_sql_file.py`; each is idempotent.
 - Vault secrets: `xai_api_key` (Groq `gsk_` keys auto-route to Groq, `xai-` to x.ai), optional
   `llm_model`, `nosih_vault_secret` for anonymous identities.
 - pg_cron jobs: `nosih-clock-tick` every minute (clock + SLA), `nosih-ai-maintenance` every minute.
@@ -253,8 +260,8 @@ All print `ALL PASS` on the live project.
 
 ## 11. Known gaps
 
-- Booking panel and chat "create complaint" are enforced in SQL but not mounted in the UI.
-- Incidents, reservations and bookings have no persistent demo rows (verification rolls back).
+- Chat "create a complaint" is enforced in SQL but not mounted in the UI.
+- Incidents and reservations have no persistent demo rows; bookings are created live (verification rolls back).
 - Department Managers read campus-wide; department-scoped RLS is not implemented.
 - Notification delivery is simulated (`SENT` rows) with no retry worker.
 - Faculty and lab staff have no login accounts.

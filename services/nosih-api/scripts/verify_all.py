@@ -53,17 +53,40 @@ def main() -> None:
         check("2.2 separation of duties enforced", res.get("error") == "FORBIDDEN", res)
 
         cur.execute("set role postgres")
-        cur.execute("select code from public.rooms where visual_state = 'HEALTHY' order by code limit 1")
-        room = cur.fetchone()[0]
+        cur.execute("select (current_date + ((8 - extract(isodow from current_date))::int % 7))::date")
+        day = cur.fetchone()[0]
+        cur.execute(
+            "select r.code, g.period_number from public.rooms r "
+            "cross join generate_series(1, 6) as g(period_number) "
+            "where r.visual_state = 'HEALTHY' "
+            "  and jsonb_array_length(public.nosih_booking_conflicts(r.code, "
+            "      ((%s)::date + public.nosih_period_start(g.period_number)) at time zone 'Asia/Kolkata', "
+            "      ((%s)::date + public.nosih_period_end(g.period_number)) at time zone 'Asia/Kolkata')) = 0 "
+            "order by r.code, g.period_number limit 1",
+            (day, day),
+        )
+        room, period = cur.fetchone()
+        cur.execute(
+            "select ((%s)::date + public.nosih_period_start(%s)) at time zone 'Asia/Kolkata', "
+            "       ((%s)::date + public.nosih_period_end(%s)) at time zone 'Asia/Kolkata'",
+            (day, period, day, period),
+        )
+        starts_at, ends_at = cur.fetchone()
         as_user(cur, ADMIN)
-        cur.execute("select public.rpc_create_booking(%s, now() + interval '1 day', now() + interval '1 day 1 hour', 'Exam seating', 'CSE-Y2-B', null)", (room,))
+        cur.execute(
+            "select public.rpc_create_booking(%s, %s, %s, 'Exam seating', null, 'facilities@nosih.edu.in', null)",
+            (room, starts_at, ends_at),
+        )
         first = cur.fetchone()[0]
         check("3.1 booking created", first.get("success") is True, first.get("booking_id"))
-        cur.execute("select public.rpc_create_booking(%s, now() + interval '1 day 30 minutes', now() + interval '1 day 90 minutes', 'Overlap', null, null)", (room,))
+        cur.execute(
+            "select public.rpc_create_booking(%s, %s, %s, 'Overlap', null, 'facilities@nosih.edu.in', null)",
+            (room, starts_at, ends_at),
+        )
         second = cur.fetchone()[0]
         check("3.2 double booking rejected by constraint", second.get("error") == "DOUBLE_BOOKED", second.get("error"))
         check("3.3 alternatives offered", len(second.get("alternatives") or []) > 0, len(second.get("alternatives") or []))
-        cur.execute("select public.rpc_cancel_booking(%s, null)", (first["booking_id"],))
+        cur.execute("select public.rpc_cancel_booking(%s, 'facilities@nosih.edu.in')", (first["booking_id"],))
         check("3.4 booking cancellation", cur.fetchone()[0].get("success") is True)
 
         cur.execute("select public.rpc_analytics_overview(30)")

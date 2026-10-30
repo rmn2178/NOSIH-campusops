@@ -9,6 +9,7 @@ import { useAuthStore } from '../../store/authStore';
 import { usePortalStore } from '../../store/portalStore';
 import type { Asset, PeriodCard, Role, SpaceDetail } from '../../types';
 import { Badge, Button, ErrorBanner, Modal, Spinner, StatusBadge, cx, formatDate } from '../ui';
+import { BookingPanel } from './BookingPanel';
 
 export type ActionMode = 'relocate' | 'staff' | 'parts';
 
@@ -113,6 +114,13 @@ export function SpaceInspectorDrawer({ code, onClose, onAction }: {
           <div className="grid grid-cols-6 gap-1.5">{detail.full_day_timeline.map((period, index) => <button key={`${period.period_number}-${index}`} onClick={() => setSelectedPeriod(period.period_number)} className={cx('min-w-0 rounded-lg border p-2 text-left transition', selectedPeriod === period.period_number ? 'border-obsidian bg-obsidian text-white' : period.away_in_lab_code ? 'border-amber-200 bg-amber-50' : 'border-stitch bg-white hover:border-stone-400')}><p className="mono text-[10px] font-semibold">P{period.period_number ?? index + 1}</p><p className="mt-2 truncate text-[9px]">{period.away_in_lab_code ?? period.class_code ?? 'Open'}</p><div className={cx('mt-2 h-1 rounded-full', period.is_relocated ? 'bg-cyan-500' : period.away_in_lab_code ? 'bg-amber-400' : 'bg-emerald-400')} /></button>)}</div>
           {timelineSelection && <div className="mt-2 rounded-lg border border-stitch bg-silk p-3 text-[11px] leading-5"><span className="mono font-medium">P{timelineSelection.period_number}</span> · {timelineSelection.subject_title ?? 'No session'}<br /><span className="text-stone">{timelineSelection.class_code ?? 'Unoccupied'} {timelineSelection.faculty_name ? `· ${timelineSelection.faculty_name}` : ''} {timelineSelection.away_in_lab_code ? `· ${timelineSelection.away_in_lab_code}` : ''}</span></div>}
         </section>}
+
+        <BookingPanel
+          code={detail.code}
+          kind={detail.kind}
+          visualState={detail.visual_state}
+          onChanged={() => invalidateTwin('Room booking updated; calendar and twin refreshed')}
+        />
 
         <section><div className="mb-3 flex items-center justify-between"><h3 className="text-xs font-semibold uppercase tracking-[.12em]">{detail.kind === 'CLASSROOM' ? 'Live 22-asset twin' : 'Equipment digital twin'}</h3><Badge tone={detail.assets.some((asset) => asset.status === 'FAULTY') ? 'red' : 'green'}>{detail.assets.length} assets</Badge></div>
           <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">{detail.assets.sort((a, b) => a.slot_index - b.slot_index).map((asset) => <button key={asset.asset_code} onClick={() => setSelectedAsset(asset.asset_code)} title={asset.asset_code} className={cx('flex min-h-[68px] flex-col items-center justify-center rounded-lg border p-1.5 transition', asset.status === 'FAULTY' ? 'fault-pulse border-red-200 bg-red-50 text-red-800' : asset.status === 'DEGRADED' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-300', selectedAsset === asset.asset_code && 'ring-2 ring-obsidian ring-offset-1')}><AssetIcon asset={asset} /><span className="mono mt-1.5 max-w-full truncate text-[8px]">{asset.asset_code.split('-').slice(-2).join('-')}</span>{asset.paper_percent !== undefined && <span className="text-[8px]">{asset.paper_percent}%</span>}</button>)}</div>

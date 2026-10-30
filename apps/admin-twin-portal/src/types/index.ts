@@ -249,6 +249,65 @@ export interface RankedRoom {
   score_breakdown?: Record<string, number | string>;
 }
 
+export type DayCode = 'MON' | 'TUE' | 'WED' | 'THU' | 'FRI';
+
+export interface RoomConflict {
+  kind: 'CLASS' | 'EXAM' | 'BOOKING';
+  label: string;
+  class_code?: string | null;
+  period_number?: number;
+  booking_id?: string;
+  owner?: string | null;
+  student_strength?: number;
+  starts_at: string;
+  ends_at: string;
+}
+
+export interface Booking {
+  id: string;
+  space_code: string;
+  class_code?: string | null;
+  purpose: string;
+  starts_at: string;
+  ends_at: string;
+  status: 'ACTIVE' | 'CANCELLED';
+  booked_by_name?: string | null;
+  department_code?: string | null;
+  created_at?: string;
+}
+
+export interface BookingAlternative {
+  room_code: string;
+  capacity: number;
+}
+
+export interface BookingResult {
+  success: boolean;
+  error?: string;
+  reason?: string;
+  booking_id?: string;
+  space_code?: string;
+  starts_at?: string;
+  ends_at?: string;
+  status?: string;
+  idempotent?: boolean;
+  already_cancelled?: boolean;
+  conflicts?: RoomConflict[];
+  alternatives?: BookingAlternative[];
+  student_strength?: number;
+  room_capacity?: number;
+  visual_state?: string;
+}
+
+export interface RoomOccupancy {
+  space_code: string;
+  capacity: number;
+  visual_state: VisualState;
+  from: string;
+  to: string;
+  conflicts: RoomConflict[];
+}
+
 export interface UnavailableResource {
   code: string;
   name?: string;

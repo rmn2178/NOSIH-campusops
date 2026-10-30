@@ -8,6 +8,8 @@ import type {
   ApprovalPreflight,
   AuditEntry,
   AuditVerification,
+  Booking,
+  BookingResult,
   CampusClock,
   Complaint,
   Incident,
@@ -21,7 +23,9 @@ import type {
   ResourceLock,
   ResourceType,
   Role,
+  RoomConflict,
   RoomConflictResult,
+  RoomOccupancy,
   SlaClock,
   SpaceDetail,
   StaffRankingResult,
@@ -361,6 +365,60 @@ function mapLock(raw: Raw): ResourceLock {
   };
 }
 
+function mapRoomConflict(raw: Raw): RoomConflict {
+  return {
+    kind: (raw.kind as RoomConflict['kind']) ?? 'CLASS',
+    label: str(raw.label),
+    class_code: raw.class_code ? str(raw.class_code) : null,
+    period_number: raw.period_number === undefined || raw.period_number === null ? undefined : num(raw.period_number),
+    booking_id: raw.booking_id ? str(raw.booking_id) : undefined,
+    owner: raw.owner ? str(raw.owner) : null,
+    student_strength: raw.student_strength === undefined ? undefined : num(raw.student_strength),
+    starts_at: str(raw.starts_at),
+    ends_at: str(raw.ends_at),
+  };
+}
+
+function mapBooking(raw: Raw): Booking {
+  return {
+    id: str(raw.id),
+    space_code: str(raw.space_code),
+    class_code: raw.class_code ? str(raw.class_code) : null,
+    purpose: str(raw.purpose),
+    starts_at: str(raw.starts_at),
+    ends_at: str(raw.ends_at),
+    status: (raw.status as Booking['status']) ?? 'ACTIVE',
+    booked_by_name: raw.booked_by_name ? str(raw.booked_by_name) : null,
+    department_code: raw.department_code ? str(raw.department_code) : null,
+    created_at: raw.created_at ? str(raw.created_at) : undefined,
+  };
+}
+
+function mapBookingResult(raw: Raw): BookingResult {
+  return {
+    success: Boolean(raw.success),
+    error: raw.error ? str(raw.error) : undefined,
+    reason: raw.reason ? str(raw.reason) : undefined,
+    booking_id: raw.booking_id === undefined ? undefined : str(raw.booking_id),
+    space_code: raw.space_code ? str(raw.space_code) : undefined,
+    starts_at: raw.starts_at ? str(raw.starts_at) : undefined,
+    ends_at: raw.ends_at ? str(raw.ends_at) : undefined,
+    status: raw.status ? str(raw.status) : undefined,
+    idempotent: raw.idempotent === undefined ? undefined : Boolean(raw.idempotent),
+    already_cancelled: raw.already_cancelled === undefined ? undefined : Boolean(raw.already_cancelled),
+    conflicts: Array.isArray(raw.conflicts) ? (raw.conflicts as Raw[]).map(mapRoomConflict) : [],
+    alternatives: Array.isArray(raw.alternatives)
+      ? (raw.alternatives as Raw[]).map((item) => ({
+          room_code: str(item.room_code),
+          capacity: num(item.capacity),
+        }))
+      : [],
+    student_strength: raw.student_strength === undefined ? undefined : num(raw.student_strength),
+    room_capacity: raw.room_capacity === undefined ? undefined : num(raw.room_capacity),
+    visual_state: raw.visual_state ? str(raw.visual_state) : undefined,
+  };
+}
+
 async function fetchWorkOrder(id: string | number): Promise<WorkOrder> {
   const { data, error } = await supabase.from('work_orders').select('*').eq('id', Number(id)).maybeSingle();
   if (error || !data) throw new ApiError(error?.message ?? 'Work order not found', 404, null);
@@ -419,6 +477,44 @@ export const api = {
       const raw = (await rpc.inspector(code)) as Raw;
       if (raw.error) throw new ApiError(str(raw.error), 404, raw);
       return mapSpaceDetail(raw);
+    },
+  },
+
+  bookings: {
+    list: async (): Promise<Booking[]> => {
+      const from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      const rows = (await rpc.listBookings(from, 200)) as Raw[];
+      return rows.map(mapBooking);
+    },
+    occupancy: async (spaceCode: string, from: string, to: string): Promise<RoomOccupancy> => {
+      const raw = (await rpc.roomOccupancy(spaceCode, from, to)) as Raw;
+      if (raw.error) throw new ApiError(str(raw.error), 404, raw);
+      return {
+        space_code: str(raw.space_code),
+        capacity: num(raw.capacity),
+        visual_state: (raw.visual_state as RoomOccupancy['visual_state']) ?? 'HEALTHY',
+        from: str(raw.from),
+        to: str(raw.to),
+        conflicts: Array.isArray(raw.conflicts) ? (raw.conflicts as Raw[]).map(mapRoomConflict) : [],
+      };
+    },
+    create: async (payload: {
+      spaceCode: string;
+      startsAt: string;
+      endsAt: string;
+      purpose: string;
+      classCode?: string | null;
+      requestKey?: string | null;
+    }): Promise<BookingResult> => {
+      const profile = await loadProfile();
+      const raw = (await rpc.createBooking({ ...payload, email: profile.email })) as Raw;
+      return mapBookingResult(raw);
+    },
+    cancel: async (bookingId: string): Promise<BookingResult> => {
+      const profile = await loadProfile();
+      const raw = (await rpc.cancelBooking(Number(bookingId), profile.email)) as Raw;
+      if (!raw.success) throw new ApiError(str(raw.error ?? 'Cancellation failed'), 409, raw);
+      return mapBookingResult(raw);
     },
   },
 
