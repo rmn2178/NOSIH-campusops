@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     supabase_service_role_key: str | None = None
     supabase_jwks_url: str | None = None
     supabase_storage_bucket: str = "complaint-evidence"
+    inbound_email_secret: str | None = None
 
     # AI runs inside Postgres and reads its key from Supabase Vault (`xai_api_key`).
     # These fields only mirror the env file for local scripts; a `gsk_` key routes

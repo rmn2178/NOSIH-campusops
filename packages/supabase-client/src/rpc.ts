@@ -252,6 +252,21 @@ export const rpc = {
       })
       .then(unwrap),
 
+  chatIntake: (
+    messages: Array<{ role: 'user' | 'assistant'; content: string }>,
+    portal: 'COMPLAINT' | 'ADMIN' = 'COMPLAINT',
+    spaceCode: string | null = null,
+    confirm = false,
+  ) =>
+    supabase
+      .rpc('rpc_chat_intake', {
+        p_messages: messages,
+        p_portal: portal,
+        p_space_code: spaceCode,
+        p_confirm: confirm,
+      })
+      .then(unwrap),
+
   aiChatHistory: (conversationId: string | null = null, limit = 50) =>
     supabase
       .rpc('rpc_ai_chat_history', { p_conversation_id: conversationId, p_limit: limit })

@@ -21,7 +21,7 @@ packages/
   supabase-client/          shared typed client: auth, RPC wrappers, realtime
 services/nosih-api/         Python seed generator, migrations runner, verification scripts
 supabase/
-  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0021)
+  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0023)
   functions/                optional Edge Functions (email webhook, SLA tick) — not required
 docs/screenshots/           reference captures
 README.md  Makefile  docker-compose.yml
@@ -219,10 +219,15 @@ the procurement funnel.
 
 - `notification_logs` is the simulated delivery service surfaced in the integrations console.
 - The email console simulates an inbox event through the real intake pipeline; the optional
-  `inbound-email-webhook` function provides the HTTP endpoint.
+  `inbound-email-webhook` function resolves the sender, submits with `source_channel = EMAIL_INBOX`
+  and logs an acknowledgement. The DB pipeline is verified; the HTTP route needs
+  `INBOUND_EMAIL_SECRET` installed on the project (`supabase secrets set`).
 - The assistant (`rpc_ai_chat`) is grounded in a twin snapshot: totals, unhealthy spaces, focus space
   assets, open work orders, incidents, SLA state and staff on shift. It refuses to invent data.
-- Chat intake (`rpc_chat_intake`) extracts a draft fault from a conversation and creates it on confirm.
+- Chat intake (`rpc_chat_intake`) is mounted as an Ask/Report toggle. Report mode extracts the room,
+  canonical category and urgency, asks up to two clarifying questions, suggests the reporter's home
+  room when the message names none, and files only after confirmation — returning the ticket, the
+  merged parent (if deduplicated) and the work order.
 
 ---
 
@@ -238,6 +243,8 @@ the procurement funnel.
 | `verify_repairs.py` | repair gate, approval, parts consumption, clock coverage, exams |
 | `verify_allocation.py` | ranking fields, lock gate, assignment, lock consumption, workload |
 | `verify_dispatch_guard.py` | caller-aware locks, stale assignment, rank RBAC, self-only claims |
+| `verify_chat_intake.py` | draft extraction, missing-room refusal, CHAT ticket + WO, merge link, sign-in gate |
+| `verify_email_intake.py` | EMAIL_INBOX channel, reporter binding, ack log, merge without a second WO |
 | `verify_chat.py` | question reaches the model, grounded codes, multi-turn, ownership guard |
 | `realistic_timetable.py` | rebuilds slots; reports collisions, load, labs |
 | `unique_student_identities.py` | unique names and `STU-…` codes per student |
@@ -248,7 +255,7 @@ All print `ALL PASS` on the live project.
 
 ## 10. Operations
 
-- Migrations `0001–0021` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Migrations `0001–0023` are applied in order with `apply_sql_file.py`; each is idempotent.
 - Vault secrets: `xai_api_key` (Groq `gsk_` keys auto-route to Groq, `xai-` to x.ai), optional
   `llm_model`, `nosih_vault_secret` for anonymous identities.
 - pg_cron jobs: `nosih-clock-tick` every minute (clock + SLA), `nosih-ai-maintenance` every minute.
@@ -260,8 +267,9 @@ All print `ALL PASS` on the live project.
 
 ## 11. Known gaps
 
-- Chat "create a complaint" is enforced in SQL but not mounted in the UI.
-- Incidents and reservations have no persistent demo rows; bookings are created live (verification rolls back).
+- Incidents and reservations have no persistent demo rows; bookings and complaints are created live.
+- `INBOUND_EMAIL_SECRET` is not installed on the project, so the live webhook route is not exercised;
+  the email pipeline is verified directly (`verify_email_intake.py`).
 - Department Managers read campus-wide; department-scoped RLS is not implemented.
 - Notification delivery is simulated (`SENT` rows) with no retry worker.
 - Faculty and lab staff have no login accounts.
