@@ -21,7 +21,7 @@ packages/
   supabase-client/          shared typed client: auth, RPC wrappers, realtime
 services/nosih-api/         Python seed generator, migrations runner, verification scripts
 supabase/
-  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0024)
+  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0027)
   functions/                optional Edge Functions (email webhook, SLA tick) — not required
 docs/screenshots/           reference captures
 README.md  Makefile  docker-compose.yml
@@ -136,7 +136,7 @@ Each room owns 22 assets; every space is addressable by a canonical code (`C4-03
 `rpc_release_resource_lock`.
 **Scheduling** — `rpc_get_room_relocation_candidates`, `rpc_execute_room_relocation`,
 `rpc_create_booking`, `rpc_cancel_booking`, `rpc_list_bookings`, `rpc_get_room_occupancy`,
-`nosih_booking_conflicts`, `nosih_booking_alternatives`.
+`nosih_booking_conflicts`, `nosih_booking_alternatives`, `rpc_set_class_strength`.
 **Stock & money** — `rpc_parts_preflight`, `rpc_reserve_parts_for_work_order`, `rpc_purchase_preflight`,
 `rpc_decide_purchase_request`, `rpc_receive_purchase_request_stock`, `rpc_approve_repair`,
 `rpc_complete_work_order`, `rpc_update_complaint_status`.
@@ -209,8 +209,12 @@ live classroom and a lab power fault. Each run creates a real complaint, work or
 damages the twin, and records the exact prior room/asset state. Runs are idempotent and can be reverted
 to their pre-run state, so the same demo can be delivered twice.
 
-**SLA** — a minute cron syncs the IST clock, accrues active minutes, emits 75% warnings and tiered
-breach notifications, and pauses clocks for parts or completion states.
+**SLA** — a minute cron syncs the IST clock and accrues active minutes, emits 75% warnings and tiered
+breach notifications, and pauses clocks for parts. Resolving a complaint or completing its work order
+closes the clock; reopening the complaint reopens the work order and the clock from "now"; the cron
+skips closed clocks and defensively closes any clock whose work order is already finished.
+`rpc_set_class_strength` changes a class size and revalidates every timetable slot and future booking,
+reporting every room that is now too small.
 
 **Twin** — every accepted write recomputes space state; the 3D node for a faulted room glows red, shows
 the ticket and pulses; the feed, inspector and assistant read the same source.
@@ -251,6 +255,7 @@ the procurement funnel.
 | `verify_chat_intake.py` | draft extraction, missing-room refusal, CHAT ticket + WO, merge link, sign-in gate |
 | `verify_email_intake.py` | EMAIL_INBOX channel, reporter binding, ack log, merge without a second WO |
 | `verify_scenarios.py` | RBAC, leak/power runs, idempotency, reset, exact asset restoration |
+| `verify_sla_integrity.py` | close/freeze on completion, reopen without double counts, defensive tick, strength revalidation |
 | `verify_chat.py` | question reaches the model, grounded codes, multi-turn, ownership guard |
 | `realistic_timetable.py` | rebuilds slots; reports collisions, load, labs |
 | `unique_student_identities.py` | unique names and `STU-…` codes per student |
@@ -261,7 +266,7 @@ All print `ALL PASS` on the live project.
 
 ## 10. Operations
 
-- Migrations `0001–0024` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Migrations `0001–0027` are applied in order with `apply_sql_file.py`; each is idempotent.
 - Vault secrets: `xai_api_key` (Groq `gsk_` keys auto-route to Groq, `xai-` to x.ai), optional
   `llm_model`, `nosih_vault_secret` for anonymous identities.
 - pg_cron jobs: `nosih-clock-tick` every minute (clock + SLA), `nosih-ai-maintenance` every minute.

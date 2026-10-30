@@ -179,6 +179,9 @@ export interface SlaClock {
   breach_state: 'ON_TRACK' | 'WARNING_75' | 'BREACHED_100';
   is_paused: boolean;
   pause_reason?: string | null;
+  is_closed?: boolean;
+  closed_at?: string | null;
+  closed_reason?: string | null;
   current_escalation_tier: number;
   deadline_at?: string;
   escalation_log?: EscalationEvent[];

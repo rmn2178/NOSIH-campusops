@@ -204,6 +204,9 @@ function mapSla(raw: Raw): SlaClock {
         : 'ON_TRACK',
     is_paused: Boolean(raw.is_paused),
     pause_reason: raw.pause_reason ? str(raw.pause_reason) : null,
+    is_closed: Boolean(raw.closed_at),
+    closed_at: raw.closed_at ? str(raw.closed_at) : null,
+    closed_reason: raw.closed_reason ? str(raw.closed_reason) : null,
     current_escalation_tier: num(raw.current_escalation_tier),
     deadline_at: raw.last_tick_at
       ? new Date(new Date(str(raw.last_tick_at)).getTime() + remaining * 60_000).toISOString()
