@@ -145,6 +145,7 @@ function mapWorkOrder(raw: Raw): WorkOrder {
     COMPLETED: 'RESOLVED',
     RESOLVED: 'RESOLVED',
     CLOSED: 'CLOSED',
+    CANCELLED: 'CANCELLED',
   };
   const score = num(raw.priority_score);
   return {

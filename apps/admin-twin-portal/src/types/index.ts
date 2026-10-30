@@ -136,7 +136,7 @@ export interface WorkOrder {
   space_code: string;
   title?: string;
   description?: string;
-  status: 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'BLOCKED_PARTS' | 'RESOLVED' | 'CLOSED';
+  status: 'OPEN' | 'ASSIGNED' | 'IN_PROGRESS' | 'BLOCKED_PARTS' | 'RESOLVED' | 'CLOSED' | 'CANCELLED';
   priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
   priority_score?: number;
   required_skill: string;
