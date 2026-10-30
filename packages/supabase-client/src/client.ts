@@ -15,7 +15,7 @@ export const supabase = createClient(url, key, {
   realtime: { params: { eventsPerSecond: 40 } },
 });
 
-const AUTH_ERROR = /jwt|token|unauthori[sz]ed|session.*expired|invalid claim/i;
+const AUTH_ERROR = /jwt|invalid claim|session (is )?expired|token has expired|access token|refresh token|unauthori[sz]ed/i;
 
 export function unwrap<T>(result: { data: T; error: { message: string } | null }): T {
   if (result.error) {
