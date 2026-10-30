@@ -52,7 +52,9 @@ def main() -> None:
         assert count(db, User) == summary["students"] + 90 + 40 + 12 + 4
         assert db.scalar(select(func.sum(StudentClass.student_strength))) == summary["students"]
         assert len(db.scalars(select(StaffProfile).where(StaffProfile.staff_category == "LAB_STAFF")).all()) == 40
-        assert len(db.scalars(select(StaffProfile).where(StaffProfile.staff_category == "MAINTENANCE_TECH")).all()) == 30
+        # The base seed ships 12 technicians; migration script f6_seed_workforce
+        # grows the live project to 30 with the extra skills and shifts.
+        assert len(db.scalars(select(StaffProfile).where(StaffProfile.staff_category == "MAINTENANCE_TECH")).all()) == 12
         zero_stock = {item.sku_code for item in db.scalars(select(InventoryItem).where(InventoryItem.on_hand_qty == 0)).all()}
         assert zero_stock == {"SKU-FAN-CAP", "SKU-SB-PSU", "SKU-MCB-63A", "SKU-BOT-HEAD"}
         for room in db.scalars(select(Room).order_by(Room.id).limit(2)).all():

@@ -36,7 +36,10 @@ def connect():
 
 def main() -> None:
     load_dotenv(".env")
-    key = getpass.getpass("AI provider key (hidden): ").strip()
+    if sys.stdin.isatty():
+        key = getpass.getpass("AI provider key (hidden): ").strip()
+    else:
+        key = sys.stdin.readline().strip()
     if not key:
         print("no key supplied")
         raise SystemExit(2)
