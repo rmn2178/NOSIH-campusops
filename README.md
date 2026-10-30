@@ -317,6 +317,7 @@ the procurement funnel.
 | `verify_sla_integrity.py` | close/freeze on completion, reopen without double counts, defensive tick, strength revalidation |
 | `verify_asset_history.py` | 50 priced repairs, parts/labour/total reconciliation, 24-hour downtime cap (a backdated 90-day ticket bills 1,440 min), open work order, empty record, RBAC and trigger pricing |
 | `verify_comment_ai.py` | Groq endpoint/model, model verdicts for a fair complaint and an insult, rewrite returned on the real comment RPC, held row kept out of the feed |
+| `verify_ai_keys.py` | multi-key pool, Groq routing, key material and the raw HTTP helper denied to browser roles, successive model calls succeed while rotating keys |
 | `verify_rbac_matrix.py` | 8 role sign-ins, department-scoped work orders/SLA/PRs, audit and directory lockdown, forged-email denial, cross-department approval, self-approval |
 | `verify_chat.py` | question reaches the model, grounded codes, multi-turn, ownership guard |
 | `realistic_timetable.py` | rebuilds slots; reports collisions, load, labs |
@@ -328,13 +329,15 @@ All print `ALL PASS` on the live project.
 
 ## 10. Operations
 
-- Migrations `0001–0043` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Migrations `0001–0044` are applied in order with `apply_sql_file.py`; each is idempotent.
 - Document numbers (tickets, work orders, incidents) draw from one monotonic sequence with unique
   indexes, so the campus pulse cron can never collide with an interactive session — before migration
   `0034` a concurrent tick and submit could mint the same work-order number and price a repair at zero.
-- Vault secrets: `xai_api_key` (Groq `gsk_` keys auto-route to Groq, `xai-` to x.ai), optional
-  `llm_model`, `nosih_vault_secret` for anonymous identities. Rotate the provider key with
-  `scripts/set_ai_key.py`, which prompts without echo and never writes the key to disk.
+- Vault secrets: `ai_api_keys` (JSON pool of Groq `gsk_` / x.ai `xai-` keys), legacy `xai_api_key`,
+  optional `llm_model`, `nosih_vault_secret` for anonymous identities. Every model call starts at the
+  next key (round-robin) and retries the rest on 401/403/408/409/429 or 5xx, so one exhausted quota
+  does not take the assistant down. Rotate or extend the pool with `scripts/set_ai_key.py`, which
+  accepts one or more keys without echo and never writes them to disk.
 - pg_cron jobs: `nosih-clock-tick` every minute (clock + SLA), `nosih-ai-maintenance` every minute,
   `nosih-campus-pulse` every minute (cadence-gated injections and optional auto-heal).
 - Pulse templates carry their own category, urgency, skill and clearance (migration `0041`), and the

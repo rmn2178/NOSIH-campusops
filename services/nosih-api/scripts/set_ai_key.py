@@ -1,16 +1,19 @@
-"""Rotate the AI provider key stored in Supabase Vault.
+"""Register AI provider keys in the Supabase Vault pool.
 
-Prompt-only: the key is never written to disk or printed. The runtime reads it
-from Vault through public.nosih_llm_* helpers, so a `gsk_` key routes to Groq
-and any other key to x.ai.
+Prompt-only: keys are never written to disk or printed. The runtime reads the
+pool through public.nosih_llm_* helpers, starts each call at the next key and
+fails over on auth, quota, rate-limit and server errors. `gsk_` keys route to
+Groq, `xai-` keys to x.ai.
 
 Usage (from services/nosih-api):
   .venv/Scripts/python.exe scripts/set_ai_key.py
+  printf '%s\n' "$KEY1" "$KEY2" | .venv/Scripts/python.exe scripts/set_ai_key.py
 """
 
 from __future__ import annotations
 
 import getpass
+import json
 import sys
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -34,28 +37,28 @@ def connect():
                                connect_timeout=10, sslmode="require", autocommit=True)
 
 
-def main() -> None:
-    load_dotenv(".env")
+def read_keys() -> list[str]:
     if sys.stdin.isatty():
         key = getpass.getpass("AI provider key (hidden): ").strip()
-    else:
-        key = sys.stdin.readline().strip()
-    if not key:
+        return [key] if key else []
+    return [line.strip() for line in sys.stdin.read().splitlines() if line.strip()]
+
+
+def main() -> None:
+    load_dotenv(".env")
+    keys = read_keys()
+    if not keys:
         print("no key supplied")
         raise SystemExit(2)
-    if not key.startswith("gsk_") and not key.startswith("xai-"):
-        print("warning: key does not look like a Groq (gsk_) or x.ai (xai-) key")
+    if any(not (key.startswith("gsk_") or key.startswith("xai-")) for key in keys):
+        print("warning: a key does not look like a Groq (gsk_) or x.ai (xai-) key")
 
     with connect() as conn, conn.cursor() as cur:
-        cur.execute("select id from vault.secrets where name = 'xai_api_key'")
-        row = cur.fetchone()
-        if row:
-            cur.execute("select vault.update_secret(%s, %s)", (row[0], key))
-        else:
-            cur.execute("select vault.create_secret(%s, 'xai_api_key', 'NOSIH AI provider key')", (key,))
-        cur.execute("select public.nosih_llm_endpoint(), public.nosih_llm_model()")
-        endpoint, model = cur.fetchone()
-        print(f"stored xai_api_key ({len(key)} chars) -> {endpoint} · {model}")
+        cur.execute("select public.nosih_register_ai_keys(%s::jsonb)", (json.dumps(keys),))
+        result = cur.fetchone()[0]
+        cur.execute("select public.nosih_ai_key_count(), public.nosih_llm_endpoint(), public.nosih_llm_model()")
+        count, endpoint, model = cur.fetchone()
+        print(f"registered {len(keys)} key(s); pool now {count} -> {endpoint} · {model}")
 
 
 if __name__ == "__main__":
