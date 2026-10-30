@@ -1,136 +1,272 @@
-# NOSIH Campus Operations Platform
+# NOSIH — Intelligent Campus Operations Platform
 
-An intelligent campus operations platform for a fictional 6-department college: natural-language
-reports become work orders, the campus digital twin mutates in the same transaction, staff and parts
-are dispatched by deterministic rules, and every privileged action is audited.
+NOSIH turns natural-language facility reports into audited, resource-aware work: a complaint becomes
+a categorised work order in one database transaction, the campus digital twin changes with it, staff
+and parts are dispatched by deterministic rules, conflicts are blocked at the storage layer, and every
+privileged action is attributable.
 
-Live stack: Supabase Postgres 17 (schema, RLS, 40+ RPCs, pg_cron, pg_net), a React admin twin portal
-(3D campus) and a React complaint portal, both talking to Supabase directly with the publishable key.
+Two React portals sit on Supabase (Postgres 17 + Auth + Realtime + Storage). All business logic is SQL;
+the AI runs inside Postgres against an OpenAI-compatible model. The Python service is a seed and
+verification toolkit, not a runtime dependency.
 
-## Architecture
+---
 
-| Layer | What lives there |
-|---|---|
-| `supabase/migrations/0001–0016` | 27-table schema, RLS, audit, RPCs, in-database AI, identity binding, live clock, bookings, analytics |
-| `apps/admin-twin-portal` | Digital twin (3D), dispatch, inventory/procurement, SLA, moderation, timetable, audit, integrations, AI assistant |
-| `apps/complaint-portal` | Feed, complaint form, clarification card, comments, AI assistant |
-| `packages/supabase-client` | Typed RPC wrappers shared by both portals |
-| `services/nosih-api` | Seed generator, verification scripts (Python). Runtime logic lives in Postgres |
-| `supabase/functions` | Optional Edge Functions (email webhook, SLA tick). Not required; AI runs in-database |
+## 1. Repository map
 
-AI: an OpenAI-compatible model (Groq `openai/gpt-oss-120b`, or x.ai Grok if an `xai-…` key is supplied)
-runs from inside Postgres via the `http` extension, with the key in Supabase Vault. Permissions, stock,
-scheduling and approval rules are deterministic SQL — the model only extracts, categorises, summarises
-and moderates.
-
-## Roles (backend-enforced)
-
-| Role | Can |
-|---|---|
-| STUDENT / FACULTY | submit complaints, comment, vote, read the feed, chat intake |
-| LAB_STAFF | lab-side reads |
-| MAINTENANCE | complete assigned work orders, reserve parts |
-| DEPARTMENT_MANAGER | department reads, first-level purchase approval up to ₹10,000 |
-| INCIDENT_MANAGER | assign staff, relocate classes, moderate, set clock |
-| FACILITIES_ADMIN | dispatch, bookings, procurement, completions, approvals up to ₹10,000 |
-| PROCUREMENT_APPROVER | approvals up to ₹100,000, dual approval, stock receipt |
-| SYSTEM_ADMIN | everything, plus break-glass identity unseal with justification |
-
-Identity is resolved from the signed-in session (`nosih_actor_role`), never from an email parameter.
-Separation of duties: no self-approval, no assignee-approval, dual approval above ₹100,000, overrides
-need a ≥20-character justification plus a distinct counter-signer.
-
-## Workflows
-
-### 1. Intake and enrichment (single transaction)
-`rpc_submit_complaint(payload)` → resolves the actor, validates the space, normalises target assets to
-real asset codes, applies the deterministic safety override, detects duplicates (trigram > 0.45 or
-embedding absent), inserts the complaint, seals anonymous identity in the vault, calls the LLM through
-`nosih_ai_run_intake`, applies `nosih_apply_complaint_ai` (category, urgency, skill, risk, assets,
-questions), creates the work order and SLA clock, updates room/asset state, correlates incidents, and
-returns the first response. If the LLM is unreachable the complaint still commits and a queued retry
-runs from pg_cron.
-
-Chat intake: `rpc_chat_intake(messages, portal, space, confirm=false)` returns a draft; `confirm=true`
-creates the complaint through the same pipeline. Email: the admin console simulates an inbox event and
-the optional `inbound-email-webhook` Edge Function provides the real endpoint.
-
-Clarification: `missing_info_questions` are returned with the first response; `rpc_supplement_complaint`
-stores answers and re-runs enrichment.
-
-### 2. Assignment
-`rpc_rank_staff_for_work_order` applies five hard gates (skill, risk clearance, shift, capacity,
-resource lock) then scores `2·skill + 3·priority_fit − 1.5·active_jobs − 0.8·block_distance − cost/200 + 1.5·urgency`.
-`rpc_assign_or_rebalance_staff` requires a held staff lock and rejects gate failures.
-`rpc_trigger_staff_shift_change` reassigns every open order when a technician goes off shift.
-
-### 3. Parts and shortages
-`rpc_reserve_parts_for_work_order` is all-or-nothing: any shortage sets the work order to
-`BLOCKED_PARTS`, pauses the SLA clock, paints the space `BLOCKED_PARTS`, and raises one purchase
-request per missing SKU. Receiving stock flips the work order back to `IN_PROGRESS` and unpauses the clock.
-
-### 4. Approvals
-`rpc_purchase_preflight` exposes the checks; `rpc_decide_purchase_request` revalidates them at execution
-(role limit, budget, no self-approval, no assignee conflict), supports dual approval and audited overrides.
-
-### 5. Room bookings
-`room_bookings` carries an exclusion constraint `(space_code =, tstzrange &&) where status='ACTIVE'`, so
-double booking is impossible at the storage layer. `rpc_create_booking` returns `DOUBLE_BOOKED` with three
-healthy alternatives; `rpc_cancel_booking` frees the slot; `rpc_list_bookings` lists the active board.
-Relocation (`rpc_execute_room_relocation`) protects the same invariant for affected classes and notifies
-the class advisor.
-
-### 6. SLA, escalation, notifications
-`rpc_tick_sla_clocks` runs every minute via pg_cron. It syncs the campus clock to IST wall time
-(09:00–15:00), accrues active minutes per clock, emits a 75% warning and then tiered breach
-notifications (`maintenance → incident → facilities → principal`) written to `notification_logs`
-(the simulated delivery service shown in the integrations console).
-
-### 7. Digital twin
-Every accepted complaint, hold, completion, part reservation and relocation recomputes room/lab state
-through shared helpers, so the 3D twin, feed, inspector and assistant always read one authoritative state.
-The timetable drives live occupancy: 120 faculty, 20 per department, 2,700 slots, one lab per class per
-day, no double-booked teacher, and a consistent teacher per subject per section.
-
-### 8. Analytics
-`rpc_analytics_overview(days)` returns open requests, status/category mix, duplicates merged, active
-incidents, SLA compliance, utilisation (spaces, technicians, bookings), stock shortages, recurring
-faults and the procurement funnel.
-
-## Disruption scenarios
-
-| Scenario | How to run | Expected |
-|---|---|---|
-| Exam room unavailable | submit a fault in the exam room, open relocation | candidates ranked with reasons, advisor notified, twin FAULTY→HEALTHY after repair |
-| Critical part out of stock | reserve a part with insufficient stock | zero partial reservations, `BLOCKED_PARTS`, SLA paused, auto purchase request; receive stock resumes |
-| Technician unavailable | end a shift with open jobs | orders rebalanced, reassignment counter and audit row |
-| Wi-Fi outage / mass reports | submit near-duplicate reports | one parent, merges counted once, incident correlation when ≥2 rooms on a board |
-
-## Verification
-
-```bash
-python services/nosih-api/scripts/verify_identity.py        # RBAC forgery must be rejected
-python services/nosih-api/scripts/verify_complaint_flow.py  # intake → WO → SLA → twin, rolled back
-python services/nosih-api/scripts/verify_live_twin.py       # occupancy shifts P3→P4
-python services/nosih-api/scripts/verify_all.py             # 10-task suite
-python services/nosih-api/scripts/realistic_timetable.py    # rebuild timetable (idempotent)
+```
+apps/
+  admin-twin-portal/        3D campus command centre (React 19 + Vite + three.js)
+  complaint-portal/         student/faculty feed, intake and clarification (React 19 + Vite)
+packages/
+  supabase-client/          shared typed client: auth, RPC wrappers, realtime
+services/nosih-api/         Python seed generator, migrations runner, verification scripts
+supabase/
+  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0017)
+  functions/                optional Edge Functions (email webhook, SLA tick) — not required
+docs/screenshots/           reference captures
+README.md  Makefile  docker-compose.yml
 ```
 
-All suites print `ALL PASS`. The complaint flow proves: ticket issued, PLUMBING/HIGH, AI applied, work
-order `PENDING_ASSIGNMENT`, SLA 30/240 running, room FAULTY, clarifying questions, reporter vote, and no
-equipment falsely flagged.
+### Admin portal
 
-## Local setup
+| Path | Role |
+|---|---|
+| `src/App.tsx` | restore session, role → workspace access map, workspace switch |
+| `src/workspaces/TwinWorkspace.tsx` | 3D twin host, clock scrubber, floor explode, inspector |
+| `src/components/twin3d/CampusCanvas3D.tsx` | scene, lighting, tower slabs, camera rig |
+| `src/components/twin3d/ClassroomNode3D.tsx` | one space: state colour, fault glow, labels |
+| `src/components/twin3d/SpaceInspectorDrawer.tsx` | live space detail (periods hidden for canteens/bots) |
+| `src/components/twin3d/campusLayout.ts` | deterministic 123-space campus coordinates |
+| `src/workspaces/WorkOrderDispatchBoard.tsx` | ranked technicians, assignment, relocation |
+| `src/workspaces/InventoryProcurementView.tsx` | stock, reservations, purchase requests, approvals |
+| `src/workspaces/SlaEscalationMonitor.tsx` | clocks, warnings, breaches, tier chain |
+| `src/workspaces/TimetableWorkspace.tsx` | 2,700-slot timetable inspection + validation |
+| `src/workspaces/ModerationQueueView.tsx` | held complaints, rewrites, identity vault |
+| `src/workspaces/ExternalIntegrationsConsole.tsx` | simulated inbox + notification log |
+| `src/workspaces/AuditChainLedgerView.tsx` | append-only audit stream |
+| `src/workspaces/IncidentCorrelationDesk.tsx` | correlated incidents |
+| `src/workspaces/AnalyticsWorkspace.tsx` | pipeline, SLA, utilisation, shortages, recurrence |
+| `src/components/layout/AppShell.tsx` | navigation, live badge, clock, role labels |
+| `src/components/layout/AssistantDock.tsx` | workspace-aware twin assistant |
+| `src/api/client.ts` | thin typed API over `@nosih/supabase-client` |
+| `src/store/` | `authStore` (session/profile), `portalStore` (workspace, clock, notices) |
+| `src/hooks/useTwinSocket.ts` | Supabase Realtime subscription for twin refresh |
 
-1. `npm install` and `npm run dev:complaint` / `npm run dev:admin`.
-2. Portal env: `VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY` (never the secret key).
-3. Server secrets live in Supabase Vault (`xai_api_key`, optional `llm_model`) and are loaded with
-   `python services/nosih-api/scripts/load_ai_secrets.py` from the gitignored `supabase/functions/.env`.
-4. Migrations are applied with `python services/nosih-api/scripts/apply_sql_file.py <file>`.
+### Complaint portal
 
-## Known gaps
+| Path | Role |
+|---|---|
+| `src/pages/CampusFeedPage.tsx` | live approved reports, filters, affected votes |
+| `src/pages/NewComplaintPage.tsx` | space picker, description, photo, submit |
+| `src/components/AiFirstResponseCard.tsx` | classification result + clarification questions |
+| `src/components/AssistantPanel.tsx` | grounded Q&A over the live twin |
+| `src/components/ComplaintCard.tsx`, `CommentThreadDrawer`, `ModerationRewriteModal` | thread UI |
+| `src/api/client.ts` | Edge Function first, SQL RPC fallback, same shape |
 
-- Analytics, bookings and chat intake are fully enforced in the database but only chat has a portal
-  entry point; the analytics and booking workspaces are not yet mounted in the admin UI.
-- Notification delivery is simulated in `notification_logs` (status `SENT`), with no retry worker.
-- Edge Functions are optional and not deployed; scheduled work runs through pg_cron instead.
+### Shared client
+
+`packages/supabase-client` exposes the browser client (publishable key only), auth helpers and typed
+wrappers for every RPC used by the portals, including `aiChat`, `chatIntake`, `analyticsOverview`.
+
+### Python service
+
+| Path | Purpose |
+|---|---|
+| `app/seed/seed_campus.py` | fictional campus generator (rooms, assets, classes, slots) |
+| `app/engines/*` | legacy rule engines kept for reference; runtime rules live in SQL |
+| `app/routers/*` | legacy FastAPI surface (not used by the portals) |
+| `scripts/apply_sql_file.py` | apply one migration with autocommit |
+| `scripts/load_ai_secrets.py` | push provider keys into Supabase Vault |
+| `scripts/realistic_timetable.py` | idempotent 2,700-slot rebuild (subjects, teachers, labs) |
+| `scripts/unique_student_identities.py` | unique student codes, names, class and department |
+| `scripts/verify_*.py` | runnable PASS checks (see §9) |
+
+---
+
+## 2. Runtime request flow
+
+```
+Browser (publishable key)
+   │  supabase.rpc(...)
+   ▼
+PostgREST  ──►  SECURITY DEFINER RPC  ──►  tables (RLS still applies to reads)
+                        │
+                        ├── pg_net / http  ──►  LLM provider (key in Vault)
+                        ├── pg_cron        ──►  clock tick, SLA sweep, AI retries
+                        └── audit_logs     ──►  every allow/reject decision
+```
+
+The browser never holds a service key. Reads go through RLS; writes go through RPCs that resolve the
+actor from `auth.uid()`.
+
+---
+
+## 3. Data model (33 tables)
+
+**Campus** — `buildings` (5), `floors` (15), `distribution_boards` (30), `rooms` (90), `labs` (20),
+`canteens` (5), `bill_bots` (8), `assets` (2,748), `departments` (6).
+
+**Academic** — `student_classes` (90), `timetable_slots` (2,700), `exams` (24 seeded), `users` (5,351:
+5,175 students with `student_code`, 120 faculty, 40 lab staff, 12 technicians, admins).
+
+**People** — `staff_profiles` (172, skills, risk clearance, shift, load), `users` (auth-linked when a
+login exists).
+
+**Operations** — `complaints` (84), `complaint_comments`, `complaint_votes`, `identity_vault`,
+`work_orders` (63), `incidents`, `maintenance_history` (50), `part_reservations`, `inventory_items`
+(30 SKUs), `purchase_requests` (25), `repair_approvals`, `room_bookings`, `resource_locks`.
+
+**Time** — `sla_clocks` (63, one per work order), `campus_clock_state` (live IST period).
+
+**Governance** — `audit_logs` (164), `notification_logs`, `ai_jobs`, `ai_chat_messages`.
+
+Each room owns 22 assets; every space is addressable by a canonical code (`C4-03`, `LAB-OOPS-02`,
+`CAN-05`, `BOT-03`), so a natural-language report resolves to exactly one twin node.
+
+---
+
+## 4. SQL function catalogue
+
+**Intake** — `rpc_submit_complaint`, `rpc_supplement_complaint`, `rpc_confirm_affected`,
+`rpc_list_complaints`, `rpc_get_complaint`, `rpc_post_comment`, `nosih_complaint_json`.
+**Read models** — `rpc_twin_overview`, `rpc_get_space_twin_inspector`, `rpc_my_profile`,
+`rpc_search_directory`, `rpc_set_clock`, `rpc_set_clock_mode`.
+**Dispatch** — `rpc_rank_staff_for_work_order` (five gates, transparent score),
+`rpc_assign_or_rebalance_staff`, `rpc_trigger_staff_shift_change`, `rpc_claim_resource_lock`,
+`rpc_release_resource_lock`.
+**Scheduling** — `rpc_get_room_relocation_candidates`, `rpc_execute_room_relocation`,
+`rpc_create_booking`, `rpc_cancel_booking`, `rpc_list_bookings`.
+**Stock & money** — `rpc_parts_preflight`, `rpc_reserve_parts_for_work_order`, `rpc_purchase_preflight`,
+`rpc_decide_purchase_request`, `rpc_receive_purchase_request_stock`, `rpc_approve_repair`,
+`rpc_complete_work_order`, `rpc_update_complaint_status`.
+**Time** — `rpc_tick_sla_clocks`, `nosih_clock_sync`.
+**AI** — `rpc_ai_chat`, `rpc_ai_chat_history`, `rpc_chat_intake`, `nosih_ai_run_intake`,
+`nosih_apply_complaint_ai`, `nosih_hold_complaint`, `nosih_ai_moderate_text`, `nosih_ai_analyse_complaint`.
+**Analytics** — `rpc_analytics_overview`.
+**Identity** — `rpc_seal_identity_in_vault`, `rpc_break_glass_unseal_identity`, `rpc_verify_audit_chain`,
+`nosih_actor_email/role/id`, `nosih_append_audit`.
+
+Every function is `SECURITY DEFINER` with a pinned `search_path`; internals (LLM, vault, queue) are not
+granted to `authenticated`.
+
+---
+
+## 5. Roles and separation of duties
+
+Student/Faculty submit and read; Lab Staff are operational readers; Maintenance completes and reserves
+parts; Department Manager reads their domain and approves up to ₹10,000; Incident Manager dispatches,
+relocates and moderates; Facilities Administrator dispatches, books, approves up to ₹10,000; Procurement
+Approver approves up to ₹100,000 and receives stock; System Administrator owns break-glass.
+
+Enforced invariants: actor resolved from session (forged emails are ignored), no self-approval, no
+work-order-assignee approval, dual approval above ₹100,000, override requires ≥20 characters plus a
+distinct counter-signer, break-glass requires a ≥25-character justification and writes an audit row.
+
+---
+
+## 6. Complaint pipeline
+
+1. `rpc_submit_complaint` resolves the user, validates the space, and normalises assets to real codes.
+2. Deterministic safety override: sparks/smoke/fire/shock/water near electrics → `SAFETY_FIRE/CRITICAL`.
+3. Duplicate detection (same space, 24 h, trigram similarity > 0.45) → merge or new ticket.
+4. Anonymous reporters are sealed with pgcrypto into `identity_vault`; only break-glass can unseal.
+5. `nosih_ai_run_intake` calls the model synchronously and `nosih_apply_complaint_ai` writes category,
+   urgency, skill, risk, assets, questions and audit — in the same transaction as the complaint.
+6. A work order and SLA clock are created, room/asset visual state changes, incidents correlate.
+7. If the provider is unreachable the complaint still commits, a job is queued and pg_cron retries.
+8. `missing_info_questions` return with the first response; supplements re-run enrichment.
+
+Asset suggestions are guarded: the model can only mark equipment the report actually mentions.
+
+---
+
+## 7. Workflows
+
+**Assignment** — five hard gates (skill, risk clearance, shift/leave, capacity, active lock) then a
+score of skill, priority, workload, distance and SLA urgency. Leaving shift auto-rebalances open work.
+
+**Parts** — all-or-nothing reservation. Any shortage moves the order to `BLOCKED_PARTS`, pauses the
+clock, paints the space and raises a purchase request per missing SKU. Receipt resumes the order.
+Completion consumes reservations and decrements stock exactly once.
+
+**Approvals** — purchase preflight is revalidated in the decision RPC; costly repairs above ₹25,000
+require `rpc_approve_repair` before completion.
+
+**Bookings** — `room_bookings` carries a GiST exclusion constraint on `(space_code, tstzrange)`, so
+double booking fails in storage. The RPC returns `DOUBLE_BOOKED` with three healthy alternatives.
+
+**Relocation** — ranks healthy, unoccupied, unlocked rooms by building/floor proximity, refuses
+smart-board-less rooms, rewrites the timetable slot, notifies the class advisor.
+
+**SLA** — a minute cron syncs the IST clock, accrues active minutes, emits 75% warnings and tiered
+breach notifications, and pauses clocks for parts or completion states.
+
+**Twin** — every accepted write recomputes space state; the 3D node for a faulted room glows red, shows
+the ticket and pulses; the feed, inspector and assistant read the same source.
+
+**Analytics** — one RPC returns pipeline counts, SLA mix, utilisation, shortages, recurring faults and
+the procurement funnel.
+
+---
+
+## 8. Notifications, integrations, AI
+
+- `notification_logs` is the simulated delivery service surfaced in the integrations console.
+- The email console simulates an inbox event through the real intake pipeline; the optional
+  `inbound-email-webhook` function provides the HTTP endpoint.
+- The assistant (`rpc_ai_chat`) is grounded in a twin snapshot: totals, unhealthy spaces, focus space
+  assets, open work orders, incidents, SLA state and staff on shift. It refuses to invent data.
+- Chat intake (`rpc_chat_intake`) extracts a draft fault from a conversation and creates it on confirm.
+
+---
+
+## 9. Verification
+
+| Script | Asserts |
+|---|---|
+| `verify_identity.py` | forged admin email rejected for approve/assign/complete/relocate |
+| `verify_complaint_flow.py` | intake → AI → work order → SLA → twin → audit, rolled back |
+| `verify_live_twin.py` | occupancy moves between periods; timetable consistency |
+| `verify_all.py` | bookings, analytics, chat, completion guard, Department Manager |
+| `verify_repairs.py` | repair gate, approval, parts consumption, clock coverage, exams |
+| `realistic_timetable.py` | rebuilds slots; reports collisions, load, labs |
+| `unique_student_identities.py` | unique names and `STU-…` codes per student |
+
+All print `ALL PASS` on the live project.
+
+---
+
+## 10. Operations
+
+- Migrations `0001–0017` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Vault secrets: `xai_api_key` (Groq `gsk_` keys auto-route to Groq, `xai-` to x.ai), optional
+  `llm_model`, `nosih_vault_secret` for anonymous identities.
+- pg_cron jobs: `nosih-clock-tick` every minute (clock + SLA), `nosih-ai-maintenance` every minute.
+- Real edge cases: outside 09:00–15:00 IST the clock pins to P1; weekends freeze; scrubbing sets the
+  clock to MANUAL until `rpc_set_clock_mode('LIVE')`.
+- Rotate any key or access token pasted into a chat.
+
+---
+
+## 11. Known gaps
+
+- Booking panel and chat "create complaint" are enforced in SQL but not mounted in the UI.
+- Incidents, reservations and bookings have no persistent demo rows (verification rolls back).
+- Department Managers read campus-wide; department-scoped RLS is not implemented.
+- Notification delivery is simulated (`SENT` rows) with no retry worker.
+- Faculty and lab staff have no login accounts.
+- `services/nosih-api/app/engines` duplicates rules that now live in SQL; keep as reference only.
+
+---
+
+## 12. Local setup
+
+```bash
+npm install
+npm run dev:complaint      # http://localhost:5173
+npm run dev:admin          # http://localhost:5174
+```
+
+Portal env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. Server secrets stay in Vault.
+Sign in with a seeded student (`aids1a01@nosih.edu.in`) or an admin account; the seeded password is
+managed outside the repository.
