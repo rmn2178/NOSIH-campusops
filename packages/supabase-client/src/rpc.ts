@@ -156,6 +156,9 @@ export const rpc = {
 
   workforceSummary: () => supabase.rpc('rpc_workforce_summary').then(unwrap),
 
+  staffProfile: (staffCode: string) =>
+    supabase.rpc('rpc_get_staff_profile', { p_staff_code: staffCode }).then(unwrap),
+
   assignStaff: (
     workOrderId: number,
     staffCode: string,

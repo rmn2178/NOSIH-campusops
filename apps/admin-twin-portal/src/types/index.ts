@@ -529,12 +529,74 @@ export interface WorkforceSkill {
   available: number;
 }
 
+export interface WorkforceStaff {
+  staff_code: string;
+  full_name: string;
+  primary_skill: string;
+  shift_code: string;
+  is_on_shift: boolean;
+  is_on_leave: boolean;
+  current_active_jobs: number;
+  max_concurrent_jobs: number;
+}
+
 export interface WorkforceSummary {
   total: number;
   on_shift: number;
   on_leave: number;
   available: number;
   by_skill: WorkforceSkill[];
+  staff: WorkforceStaff[];
+}
+
+export interface StaffProfileJob {
+  wo_number: string;
+  space_code: string;
+  status: string;
+  required_skill: string;
+  priority_score?: number;
+  created_at?: string | null;
+  completed_at?: string | null;
+}
+
+export interface StaffProfileRepair {
+  asset_code: string;
+  space_code: string;
+  fault_category: string;
+  action_taken: string;
+  completed_at?: string | null;
+  downtime_mins?: number;
+  total_cost_inr?: number;
+}
+
+export interface StaffProfile {
+  staff_code: string;
+  full_name: string;
+  email: string;
+  portal_role: string;
+  department_code?: string | null;
+  staff_category: string;
+  primary_skill: string;
+  skill_proficiency?: number;
+  risk_clearance: string;
+  shift_code: string;
+  is_on_shift: boolean;
+  is_on_leave: boolean;
+  current_block_location?: string | null;
+  hourly_cost_inr?: number;
+  current_active_jobs: number;
+  max_concurrent_jobs: number;
+  stats: {
+    jobs_total: number;
+    jobs_open: number;
+    jobs_completed: number;
+    repairs_count: number;
+    repair_cost_inr: number;
+    avg_downtime_mins: number;
+    last_repair_at?: string | null;
+  };
+  jobs: StaffProfileJob[];
+  repairs: StaffProfileRepair[];
 }
 
 export interface PartRequest {

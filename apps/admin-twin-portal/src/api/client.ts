@@ -34,6 +34,7 @@ import type {
   ScenarioSummary,
   SlaClock,
   SpaceDetail,
+  StaffProfile,
   StaffRankingResult,
   TimetableSlot,
   TimetableValidation,
@@ -853,6 +854,72 @@ export const api = {
               total: num(skill.total),
               on_shift: num(skill.on_shift),
               available: num(skill.available),
+            }))
+          : [],
+        staff: Array.isArray(raw.staff)
+          ? (raw.staff as Raw[]).map((person) => ({
+              staff_code: str(person.staff_code),
+              full_name: str(person.full_name),
+              primary_skill: str(person.primary_skill),
+              shift_code: str(person.shift_code),
+              is_on_shift: Boolean(person.is_on_shift),
+              is_on_leave: Boolean(person.is_on_leave),
+              current_active_jobs: num(person.current_active_jobs),
+              max_concurrent_jobs: num(person.max_concurrent_jobs),
+            }))
+          : [],
+      };
+    },
+    staffProfile: async (staffCode: string): Promise<StaffProfile> => {
+      const raw = (await rpc.staffProfile(staffCode)) as Raw;
+      if (raw.error) throw new ApiError(str(raw.error), raw.error === 'STAFF_NOT_FOUND' ? 404 : 403, raw);
+      const stats = (raw.stats ?? {}) as Raw;
+      return {
+        staff_code: str(raw.staff_code),
+        full_name: str(raw.full_name),
+        email: str(raw.email),
+        portal_role: str(raw.portal_role),
+        department_code: raw.department_code ? str(raw.department_code) : null,
+        staff_category: str(raw.staff_category),
+        primary_skill: str(raw.primary_skill),
+        skill_proficiency: raw.skill_proficiency === null || raw.skill_proficiency === undefined ? undefined : num(raw.skill_proficiency),
+        risk_clearance: str(raw.risk_clearance),
+        shift_code: str(raw.shift_code),
+        is_on_shift: Boolean(raw.is_on_shift),
+        is_on_leave: Boolean(raw.is_on_leave),
+        current_block_location: raw.current_block_location ? str(raw.current_block_location) : null,
+        hourly_cost_inr: raw.hourly_cost_inr === null || raw.hourly_cost_inr === undefined ? undefined : num(raw.hourly_cost_inr),
+        current_active_jobs: num(raw.current_active_jobs),
+        max_concurrent_jobs: num(raw.max_concurrent_jobs),
+        stats: {
+          jobs_total: num(stats.jobs_total),
+          jobs_open: num(stats.jobs_open),
+          jobs_completed: num(stats.jobs_completed),
+          repairs_count: num(stats.repairs_count),
+          repair_cost_inr: num(stats.repair_cost_inr),
+          avg_downtime_mins: num(stats.avg_downtime_mins),
+          last_repair_at: stats.last_repair_at ? str(stats.last_repair_at) : null,
+        },
+        jobs: Array.isArray(raw.jobs)
+          ? (raw.jobs as Raw[]).map((job) => ({
+              wo_number: str(job.wo_number),
+              space_code: str(job.space_code),
+              status: str(job.status),
+              required_skill: str(job.required_skill),
+              priority_score: job.priority_score === null || job.priority_score === undefined ? undefined : num(job.priority_score),
+              created_at: job.created_at ? str(job.created_at) : null,
+              completed_at: job.completed_at ? str(job.completed_at) : null,
+            }))
+          : [],
+        repairs: Array.isArray(raw.repairs)
+          ? (raw.repairs as Raw[]).map((repair) => ({
+              asset_code: str(repair.asset_code),
+              space_code: str(repair.space_code),
+              fault_category: str(repair.fault_category),
+              action_taken: str(repair.action_taken),
+              completed_at: repair.completed_at ? str(repair.completed_at) : null,
+              downtime_mins: repair.downtime_mins === null || repair.downtime_mins === undefined ? undefined : num(repair.downtime_mins),
+              total_cost_inr: repair.total_cost_inr === null || repair.total_cost_inr === undefined ? undefined : num(repair.total_cost_inr),
             }))
           : [],
       };

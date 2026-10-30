@@ -37,7 +37,8 @@ README.md  Makefile  docker-compose.yml
 | `src/components/twin3d/ClassroomNode3D.tsx` | one space: state colour, fault glow, labels |
 | `src/components/twin3d/SpaceInspectorDrawer.tsx` | live space detail (periods hidden for canteens/bots) |
 | `src/components/twin3d/campusLayout.ts` | deterministic 123-space campus coordinates |
-| `src/workspaces/WorkOrderDispatchBoard.tsx` | ranked technicians, assignment, relocation |
+| `src/workspaces/WorkOrderDispatchBoard.tsx` | ranked technicians, assignment, relocation, clickable assignee names |
+| `src/components/modals/StaffProfileModal.tsx` | full staff record: identity, shift, clearance, load, job history, priced repairs |
 | `src/workspaces/InventoryProcurementView.tsx` | stock, reservations, purchase requests, approvals |
 | `src/workspaces/SlaEscalationMonitor.tsx` | clocks, warnings, breaches, tier chain |
 | `src/workspaces/TimetableWorkspace.tsx` | 2,700-slot timetable inspection + validation |
@@ -109,15 +110,15 @@ actor from `auth.uid()`.
 **Campus** — `buildings` (5), `floors` (15), `distribution_boards` (30), `rooms` (90), `labs` (20),
 `canteens` (5), `bill_bots` (8), `assets` (2,748), `departments` (6).
 
-**Academic** — `student_classes` (90), `timetable_slots` (2,700), `exams` (24 seeded), `users` (5,357:
-5,175 students with `student_code`, 120 faculty, 40 lab staff, 12 technicians, 6 department managers,
+**Academic** — `student_classes` (90), `timetable_slots` (2,700), `exams` (24 seeded), `users` (5,375:
+5,175 students with `student_code`, 120 faculty, 40 lab staff, 30 technicians, 6 department managers,
 4 command administrators), `department_spaces` (172 department → space pairs derived from the timetable).
 
-**People** — `staff_profiles` (172, skills, risk clearance, shift, load), `users` (auth-linked when a
+**People** — `staff_profiles` (190, skills, risk clearance, shift, load), `users` (auth-linked when a
 login exists).
 
-**Operations** — `complaints` (90), `complaint_comments`, `complaint_votes`, `identity_vault`,
-`work_orders` (69), `incidents`, `maintenance_history` (50, spread over the last 90 days),
+**Operations** — `complaints` (90+), `complaint_comments`, `complaint_votes`, `identity_vault`,
+`work_orders`, `incidents`, `maintenance_history` (71, latest repairs from the live queue),
 `part_reservations`, `inventory_items` (30 SKUs), `purchase_requests` (25), `repair_approvals`,
 `room_bookings`, `resource_locks`.
 
@@ -141,8 +142,8 @@ Each room owns 22 assets; every space is addressable by a canonical code (`C4-03
 **Read models** — `rpc_twin_overview`, `rpc_get_space_twin_inspector`, `rpc_my_profile`,
 `rpc_search_directory`, `rpc_set_clock`, `rpc_set_clock_mode`.
 **Dispatch** — `rpc_rank_staff_for_work_order` (five gates, transparent score),
-`rpc_assign_or_rebalance_staff`, `rpc_trigger_staff_shift_change`, `rpc_claim_resource_lock`,
-`rpc_release_resource_lock`.
+`rpc_assign_or_rebalance_staff`, `rpc_trigger_staff_shift_change`, `rpc_workforce_summary`,
+`rpc_get_staff_profile`, `rpc_claim_resource_lock`, `rpc_release_resource_lock`.
 **Scheduling** — `rpc_get_room_relocation_candidates`, `rpc_execute_room_relocation`,
 `rpc_create_booking`, `rpc_cancel_booking`, `rpc_list_bookings`, `rpc_get_room_occupancy`,
 `nosih_booking_conflicts`, `nosih_booking_alternatives`, `rpc_set_class_strength`.
@@ -204,6 +205,9 @@ Asset suggestions are guarded: the model can only mark equipment the report actu
 
 **Assignment** — five hard gates (skill, risk clearance, shift/leave, capacity, active lock) then a
 score of skill, priority, workload, distance and SLA urgency. Leaving shift auto-rebalances open work.
+The maintenance workforce is thirty technicians across ELECTRICAL, IT_AV, HVAC, PLUMBING, CARPENTRY and
+LAB_SUPPORT — 28 on shift, one deliberately off shift and one on leave so the gates stay visible — and
+the dispatch workspace strips the live roster (on shift, available, per-skill) above the queue.
 
 **Parts** — all-or-nothing reservation. Any shortage moves the order to `BLOCKED_PARTS`, pauses the
 clock, paints the space and raises a purchase request per missing SKU. Receipt resumes the order.
@@ -247,7 +251,10 @@ skips closed clocks and defensively closes any clock whose work order is already
 reporting every room that is now too small.
 
 **Twin** — every accepted write recomputes space state; the 3D node for a faulted room glows red, shows
-the ticket and pulses; the feed, inspector and assistant read the same source.
+the ticket and pulses; the feed, inspector and assistant read the same source. Colour follows fault
+materiality, not wording: safety overrides, smart boards, lab workstations and canteen appliances are
+**major** (red, pulsing), while single manageable faults — one fan, one LED, a socket — glow **light
+orange** and the legend names them *Manageable*.
 
 **Asset records** — selecting any asset in the twin opens its full service record: installed age, spare
 SKU, 30-day failure count, health score, open work order, lifetime downtime and cost. Each previous
@@ -294,6 +301,9 @@ the procurement funnel.
 | `verify_scenarios.py` | RBAC, leak/power runs, idempotency, reset, exact asset restoration |
 | `verify_pulse.py` | cron schedule, paused/cooldown/cap gates, all four facility families forced through the real pipeline, assign→parts→completion→twin restore with priced repair, auto-heal, per-event revert, race-proof document numbers, RBAC |
 | `verify_seed_realism.py` | 36 distinct staff surnames per role with bounded repeats, 50 priced repairs spread over the last 90 days |
+| `verify_twin_severity.py` | single-fan fault stays manageable/orange, smart board and safety faults go major/red, mixed complaints resolve in the right order, pulse follows the rubric |
+| `verify_workforce.py` | 30 technicians with unique names, every skill staffed, every open job ranks ≥2 and auto-assigns within capacity, off-shift/leave/capacity/clearance gates, summary RBAC |
+| `verify_staff_profile.py` | roster of 30 with identity and load, profile stats reconcile with the database, capped job/repair lists, unknown code 404, student denial |
 | `verify_sla_integrity.py` | close/freeze on completion, reopen without double counts, defensive tick, strength revalidation |
 | `verify_asset_history.py` | 50 priced repairs, parts/labour/total reconciliation, open work order, empty record, RBAC and trigger pricing |
 | `verify_rbac_matrix.py` | 8 role sign-ins, department-scoped work orders/SLA/PRs, audit and directory lockdown, forged-email denial, cross-department approval, self-approval |
@@ -307,7 +317,7 @@ All print `ALL PASS` on the live project.
 
 ## 10. Operations
 
-- Migrations `0001–0034` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Migrations `0001–0039` are applied in order with `apply_sql_file.py`; each is idempotent.
 - Document numbers (tickets, work orders, incidents) draw from one monotonic sequence with unique
   indexes, so the campus pulse cron can never collide with an interactive session — before migration
   `0034` a concurrent tick and submit could mint the same work-order number and price a repair at zero.

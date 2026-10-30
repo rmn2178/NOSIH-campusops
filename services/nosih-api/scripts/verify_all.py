@@ -106,7 +106,7 @@ def main() -> None:
 
         as_user(cur, ADMIN)
         cur.execute("set role postgres")
-        cur.execute("select id from public.work_orders where status = 'IN_PROGRESS' order by id limit 1")
+        cur.execute("select id from public.work_orders where status in ('ASSIGNED', 'IN_PROGRESS') order by id limit 1")
         wo = cur.fetchone()[0]
         as_user(cur, ADMIN)
         cur.execute("select public.rpc_complete_work_order(%s, 'Verified repair with replacement fan', null)", (wo,))
