@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Check, ChevronDown, FilePlus2, Filter, MessageSquareText, RefreshCw, SlidersHorizontal, Wifi, WifiOff, X } from 'lucide-react';
 import { api } from '../api/client';
 import type { Complaint, ComplaintFilters, ComplaintStatus } from '../api/client';
 import { connectPortalSocket } from '../api/websocket';
-import { CommentThreadDrawer } from '../components/CommentThreadDrawer';
 import { ComplaintCard } from '../components/ComplaintCard';
 import { useAuthStore } from '../store/useAuthStore';
 import { cx } from '../lib/format';
@@ -50,6 +49,7 @@ function matchesFilters(complaint: Complaint, filters: ActiveFilters, department
 
 export function CampusFeedPage() {
   const { token, user } = useAuthStore();
+  const navigate = useNavigate();
   const [filters, setFilters] = useState<ActiveFilters>(initialFilters);
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +58,6 @@ export function CampusFeedPage() {
   const [error, setError] = useState('');
   const [votingId, setVotingId] = useState<string | null>(null);
   const seenCommentIds = useRef(new Set<string>());
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [, setClockTick] = useState(0);
 
@@ -131,15 +130,6 @@ export function CampusFeedPage() {
     }
   };
 
-  const handleCommentAdded = useCallback((complaintId: string, commentId: string) => {
-    if (seenCommentIds.current.has(commentId)) return;
-    seenCommentIds.current.add(commentId);
-    setComplaints((current) => current.map((complaint) => complaint.id === complaintId
-      ? { ...complaint, comment_count: complaint.comment_count + 1 }
-      : complaint));
-  }, []);
-
-  const selectedComplaint = complaints.find((complaint) => complaint.id === selectedId) || null;
   const activeFilterCount = [filters.zone !== 'ALL', filters.status !== 'ALL', filters.category !== 'ALL', filters.myDepartment].filter(Boolean).length;
 
   return (
@@ -237,7 +227,7 @@ export function CampusFeedPage() {
         <motion.div layout className="grid items-start gap-5 pt-5 md:grid-cols-2 xl:grid-cols-3">
           <AnimatePresence mode="popLayout">
             {complaints.map((complaint) => (
-              <ComplaintCard key={complaint.id} complaint={complaint} voting={votingId === complaint.id} onAffected={handleAffected} onComments={(item) => setSelectedId(item.id)} />
+              <ComplaintCard key={complaint.id} complaint={complaint} voting={votingId === complaint.id} onAffected={handleAffected} onComments={(item) => navigate(`/complaints/${item.id}#comments`)} />
             ))}
           </AnimatePresence>
         </motion.div>
@@ -252,12 +242,6 @@ export function CampusFeedPage() {
           </div>
         </div>
       )}
-
-      <AnimatePresence>
-        {selectedComplaint && (
-          <CommentThreadDrawer complaint={selectedComplaint} onClose={() => setSelectedId(null)} onCommentAdded={handleCommentAdded} />
-        )}
-      </AnimatePresence>
     </div>
   );
 }

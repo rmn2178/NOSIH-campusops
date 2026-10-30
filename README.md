@@ -59,11 +59,12 @@ README.md  Makefile  docker-compose.yml
 
 | Path | Role |
 |---|---|
-| `src/pages/CampusFeedPage.tsx` | live approved reports, filters, affected votes |
+| `src/pages/CampusFeedPage.tsx` | live approved reports, filters, affected votes, comment-count handoff |
+| `src/pages/ComplaintDetailPage.tsx` | full ticket record with the live community thread and comment composer |
 | `src/pages/NewComplaintPage.tsx` | space picker, description, photo, submit |
 | `src/components/AiFirstResponseCard.tsx` | classification result + clarification questions |
 | `src/components/AssistantPanel.tsx` | grounded Q&A over the live twin |
-| `src/components/ComplaintCard.tsx`, `CommentThreadDrawer`, `ModerationRewriteModal` | thread UI |
+| `src/components/ComplaintCard.tsx`, `CommentThread`, `ModerationRewriteModal` | thread UI |
 | `src/api/client.ts` | Edge Function first, SQL RPC fallback, same shape |
 
 ### Shared client

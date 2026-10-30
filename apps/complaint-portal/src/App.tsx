@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { PortalLayout } from './components/PortalLayout';
 import { CampusFeedPage } from './pages/CampusFeedPage';
+import { ComplaintDetailPage } from './pages/ComplaintDetailPage';
 import { LoginGatewayPage } from './pages/LoginGatewayPage';
 import { NewComplaintPage } from './pages/NewComplaintPage';
 import { useAuthStore } from './store/useAuthStore';
@@ -35,6 +36,7 @@ export default function App() {
       <Route element={<ProtectedApp />}>
         <Route path="/feed" element={<CampusFeedPage />} />
         <Route path="/complaints/new" element={<NewComplaintPage />} />
+        <Route path="/complaints/:complaintId" element={<ComplaintDetailPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/feed" replace />} />
     </Routes>
