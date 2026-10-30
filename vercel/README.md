@@ -18,6 +18,26 @@ npm run preview    # serves dist/ on 5180
 The normal monorepo portal stays on `http://localhost:5173`; this copy uses
 port 5180 so both can run at the same time.
 
+## Live AI — no API key in Vercel
+
+The assistant and comment moderation are server-side. The browser calls
+`rpc_ai_chat`, `rpc_chat_intake` and `rpc_post_comment`; Postgres reaches the
+Groq key pool in Supabase Vault (`ai_api_keys`) and returns the answer/verdict.
+That is why this bundle needs only the two publishable variables. Adding
+`XAI_API_KEY` to Vercel would expose an unused secret and is never required.
+
+To prove the model path before a demo, run from the repository:
+
+```bash
+cd services/nosih-api
+.venv/Scripts/python.exe scripts/verify_ai_keys.py
+.venv/Scripts/python.exe scripts/verify_comment_ai.py
+.venv/Scripts/python.exe scripts/verify_chat.py
+```
+
+All three must print `ALL PASS` / `13/13 passed`. The assistant reply carries an
+`engine` field (`llm` when the live model answered).
+
 ## Environment variables
 
 Copy `.env.example` to `.env` for local work (already done here) and set the
