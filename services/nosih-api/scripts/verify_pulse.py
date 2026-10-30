@@ -70,7 +70,7 @@ def main() -> None:
         check("P1 pulse cron scheduled every minute", row is not None and row[0] == "* * * * *", row)
 
         row = fetch_one(cur, "select enabled, interval_minutes, max_open_simulated from public.simulation_config")
-        check("P2 pulse config present", row is not None and row[0] is True, row)
+        check("P2 pulse config present", row is not None and row[1] >= 1 and 1 <= row[2] <= 10, row)
 
         row = fetch_one(cur, "select position('update public.bill_bots set visual_state' in "
                              "pg_get_functiondef('public.nosih_recompute_space_state(text)'::regprocedure)) > 0")
