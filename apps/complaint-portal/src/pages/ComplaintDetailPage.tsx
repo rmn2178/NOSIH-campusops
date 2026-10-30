@@ -59,12 +59,15 @@ export function ComplaintDetailPage() {
   }
 
   if (!complaint) {
+    const friendly = error.includes('COMPLAINT_NOT_FOUND')
+      ? 'We could not find that ticket. It may have been merged into another report or removed.'
+      : error || 'The ticket may have been removed, merged, or belongs to another campus view.';
     return (
       <div className="mx-auto max-w-[1100px] px-4 py-16 sm:px-6 lg:px-10">
         <div className="cloth-card flex flex-col items-center px-6 py-16 text-center">
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-stitch bg-silk text-stone"><ShieldQuestion size={25} strokeWidth={1.4} /></span>
           <h1 className="mt-5 text-lg font-semibold">This complaint is not available</h1>
-          <p className="mt-2 max-w-sm text-sm leading-6 text-stone">{error || 'The ticket may have been removed, merged, or belongs to another campus view.'}</p>
+          <p className="mt-2 max-w-sm text-sm leading-6 text-stone">{friendly}</p>
           <Link to="/feed" className="btn-primary mt-5"><ArrowLeft size={16} /> Back to the feed</Link>
         </div>
       </div>

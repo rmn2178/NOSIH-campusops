@@ -8,7 +8,7 @@ import { api } from '../../api/client';
 import { useAuthStore } from '../../store/authStore';
 import { usePortalStore } from '../../store/portalStore';
 import type { Asset, PeriodCard, Role, SpaceDetail } from '../../types';
-import { Badge, Button, ErrorBanner, Modal, Spinner, StatusBadge, cx, formatDate } from '../ui';
+import { Badge, Button, ErrorBanner, Modal, Spinner, StatusBadge, assetShortLabel, cx, formatDate } from '../ui';
 import { AssetRecordPanel } from './AssetRecordPanel';
 import { BookingPanel } from './BookingPanel';
 
@@ -123,7 +123,7 @@ export function SpaceInspectorDrawer({ code, onClose, onAction }: {
         />
 
         <section><div className="mb-3 flex items-center justify-between"><h3 className="text-xs font-semibold uppercase tracking-[.12em]">{detail.kind === 'CLASSROOM' ? 'Live 22-asset twin' : 'Equipment digital twin'}</h3><Badge tone={detail.assets.some((asset) => asset.status === 'FAULTY') ? 'red' : 'green'}>{detail.assets.length} assets</Badge></div>
-          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">{detail.assets.sort((a, b) => a.slot_index - b.slot_index).map((asset) => <button key={asset.asset_code} onClick={() => setSelectedAsset((current) => current === asset.asset_code ? null : asset.asset_code)} aria-pressed={selectedAsset === asset.asset_code} title={`${asset.name ?? asset.asset_code} · ${asset.asset_code}`} className={cx('flex min-h-[68px] flex-col items-center justify-center rounded-lg border p-1.5 transition', asset.status === 'FAULTY' ? 'fault-pulse border-red-200 bg-red-50 text-red-800' : asset.status === 'DEGRADED' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-300', selectedAsset === asset.asset_code && 'ring-2 ring-obsidian ring-offset-1')}><AssetIcon asset={asset} /><span className="mono mt-1.5 max-w-full truncate text-[8px]">{asset.asset_code.split('-').slice(-2).join('-')}</span>{asset.paper_percent !== undefined && <span className="text-[8px]">{asset.paper_percent}%</span>}</button>)}</div>
+          <div className="grid grid-cols-4 gap-2 sm:grid-cols-6">{detail.assets.sort((a, b) => a.slot_index - b.slot_index).map((asset) => <button key={asset.asset_code} onClick={() => setSelectedAsset((current) => current === asset.asset_code ? null : asset.asset_code)} aria-pressed={selectedAsset === asset.asset_code} title={`${asset.name ?? asset.asset_code} · ${asset.asset_code}`} className={cx('flex min-h-[68px] flex-col items-center justify-center rounded-lg border p-1.5 transition', asset.status === 'FAULTY' ? 'fault-pulse border-red-200 bg-red-50 text-red-800' : asset.status === 'DEGRADED' ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-emerald-100 bg-white text-emerald-800 hover:border-emerald-300', selectedAsset === asset.asset_code && 'ring-2 ring-obsidian ring-offset-1')}><AssetIcon asset={asset} /><span className="mono mt-1.5 max-w-full truncate text-[8px]">{assetShortLabel(asset)}</span>{asset.paper_percent !== undefined && <span className="text-[8px]">{asset.paper_percent}%</span>}</button>)}</div>
           <p className="mt-2 text-[10px] text-stone">Select any asset to open its full service record, previous repairs and cost history.</p>
           {selectedAsset && <div className="mt-3"><AssetRecordPanel key={selectedAsset} assetCode={selectedAsset} onClose={() => setSelectedAsset(null)} /></div>}
         </section>

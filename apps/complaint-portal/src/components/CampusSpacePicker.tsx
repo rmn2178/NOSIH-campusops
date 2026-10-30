@@ -5,7 +5,7 @@ import { api } from '../api/client';
 import type { AssetTarget, SpaceDetails, SpaceKind } from '../api/client';
 import { findSpace, normalizeSpaceCode, spacesForKind } from '../data/campus';
 import type { SpaceOption } from '../data/campus';
-import { cx } from '../lib/format';
+import { assetShortLabel, cx } from '../lib/format';
 import { StatusPill, toneForStatus } from './StatusPill';
 
 interface CampusSpacePickerProps {
@@ -311,7 +311,7 @@ export function CampusSpacePicker({ value, onChange, selectedAssets, onAssetsCha
                         >
                           {active && <Check className="absolute right-1.5 top-1.5" size={11} />}
                           <Zap size={13} className="mx-auto mb-1.5 text-stone" />
-                          <span className="mono block truncate text-[9px] font-medium">{asset.asset_code.split('-').slice(-2).join('-')}</span>
+                          <span className="mono block truncate text-[9px] font-medium">{assetShortLabel(asset)}</span>
                           <span className={cx('mt-1 block text-[8px] uppercase', asset.status === 'FAULTY' ? 'text-red-700' : 'text-stone')}>{asset.status}</span>
                         </button>
                       );

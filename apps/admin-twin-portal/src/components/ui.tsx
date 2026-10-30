@@ -133,3 +133,21 @@ export function CheckItem({ passed, label, detail }: { passed: boolean; label: s
 
 export const formatDate = (value?: string) => value ? new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
 export const formatINR = (value: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(value);
+
+const assetTypeShort: Record<string, string> = {
+  CEILING_FAN: 'Fan',
+  LED_LIGHT: 'Light',
+  SMART_BOARD: 'Board',
+  LAB_WORKSTATION: 'PC',
+  CANTEEN_APPLIANCE: 'Appliance',
+  BILL_BOT_MECHANISM: 'Bot',
+};
+
+/** Asset codes share a room prefix, so the last two segments collide across
+ * asset types; show the type and slot instead of a repeated "03-01". */
+export const assetShortLabel = (asset: { asset_type: string; asset_code: string; slot_index?: number | null }) => {
+  const label = assetTypeShort[asset.asset_type]
+    ?? asset.asset_type.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const slot = asset.slot_index ?? Number(asset.asset_code.split('-').pop());
+  return Number.isFinite(slot) ? `${label} ${String(slot).padStart(2, '0')}` : label;
+};
