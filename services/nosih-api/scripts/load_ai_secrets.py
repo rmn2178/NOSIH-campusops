@@ -15,7 +15,8 @@ ENV_FILE = REPO_ROOT / "supabase" / "functions" / ".env"
 
 VAULT_NAMES = {
     "XAI_API_KEY": "xai_api_key",
-    "GEMINI_API_KEY": "gemini_api_key",
+    # Explicit model override; leave unset to let the provider default win.
+    "LLM_MODEL": "llm_model",
 }
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))

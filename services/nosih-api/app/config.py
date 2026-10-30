@@ -30,12 +30,11 @@ class Settings(BaseSettings):
     supabase_jwks_url: str | None = None
     supabase_storage_bucket: str = "complaint-evidence"
 
-    # AI: Grok for text, Gemini for embeddings
+    # AI runs inside Postgres and reads its key from Supabase Vault (`xai_api_key`).
+    # These fields only mirror the env file for local scripts; a `gsk_` key routes
+    # to Groq, an `xai-` key routes to x.ai.
     xai_api_key: str | None = None
-    gemini_api_key: str | None = None
-    grok_model: str = "grok-4.3"
-    gemini_embed_model: str = "gemini-embedding-001"
-    embedding_dims: int = 384
+    grok_model: str = "openai/gpt-oss-120b"
 
     @property
     def supabase_admin_key(self) -> str | None:
