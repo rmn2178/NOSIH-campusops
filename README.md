@@ -228,6 +228,13 @@ reporting every room that is now too small.
 **Twin** — every accepted write recomputes space state; the 3D node for a faulted room glows red, shows
 the ticket and pulses; the feed, inspector and assistant read the same source.
 
+**Asset records** — selecting any asset in the twin opens its full service record: installed age, spare
+SKU, 30-day failure count, health score, open work order, lifetime downtime and cost. Each previous
+repair shows the date, work order, fault, action, technician, parts consumed, parts cost, labour cost and
+total, linked to the complaint that raised it. A `BEFORE INSERT` trigger prices every new maintenance row
+from its reservations and the technician's hourly rate; the same panel exports the whole history as CSV.
+Searching a room code now prefers an exact match over another room's zero-index alias.
+
 **Analytics** — one RPC returns pipeline counts, SLA mix, utilisation, shortages, recurring faults and
 the procurement funnel.
 
@@ -265,6 +272,7 @@ the procurement funnel.
 | `verify_email_intake.py` | EMAIL_INBOX channel, reporter binding, ack log, merge without a second WO |
 | `verify_scenarios.py` | RBAC, leak/power runs, idempotency, reset, exact asset restoration |
 | `verify_sla_integrity.py` | close/freeze on completion, reopen without double counts, defensive tick, strength revalidation |
+| `verify_asset_history.py` | 50 priced repairs, parts/labour/total reconciliation, open work order, empty record, RBAC and trigger pricing |
 | `verify_rbac_matrix.py` | 8 role sign-ins, department-scoped work orders/SLA/PRs, audit and directory lockdown, forged-email denial, cross-department approval, self-approval |
 | `verify_chat.py` | question reaches the model, grounded codes, multi-turn, ownership guard |
 | `realistic_timetable.py` | rebuilds slots; reports collisions, load, labs |
@@ -276,7 +284,7 @@ All print `ALL PASS` on the live project.
 
 ## 10. Operations
 
-- Migrations `0001–0030` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Migrations `0001–0032` are applied in order with `apply_sql_file.py`; each is idempotent.
 - Vault secrets: `xai_api_key` (Groq `gsk_` keys auto-route to Groq, `xai-` to x.ai), optional
   `llm_model`, `nosih_vault_secret` for anonymous identities.
 - pg_cron jobs: `nosih-clock-tick` every minute (clock + SLA), `nosih-ai-maintenance` every minute.

@@ -7,6 +7,9 @@ export const rpc = {
   inspector: (space: string) =>
     supabase.rpc('rpc_get_space_twin_inspector', { p_space_input: space }).then(unwrap),
 
+  assetHistory: (assetCode: string) =>
+    supabase.rpc('rpc_get_asset_history', { p_asset_code: assetCode }).then(unwrap),
+
   twinOverview: () => supabase.rpc('rpc_twin_overview').then(unwrap),
 
   submitComplaint: (payload: Record<string, unknown>) =>

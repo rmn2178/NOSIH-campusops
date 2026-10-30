@@ -94,6 +94,7 @@ export interface Asset {
   id?: string;
   asset_code: string;
   asset_type: string;
+  name?: string;
   slot_index: number;
   status: 'OK' | 'DEGRADED' | 'FAULTY';
   paper_percent?: number;
@@ -230,6 +231,84 @@ export interface MaintenanceRecord {
   technician_name?: string;
   notes?: string;
   completed_at: string;
+}
+
+export interface AssetRepairPart {
+  sku_code: string;
+  name: string;
+  qty: number;
+  unit_cost_inr: number;
+}
+
+export interface AssetRepairRecord {
+  id: string;
+  completed_at: string;
+  work_order_number?: string;
+  fault_category?: string;
+  action: string;
+  technician_code?: string;
+  technician_name?: string;
+  technician_role?: string;
+  downtime_mins: number;
+  parts_cost_inr: number;
+  labour_cost_inr: number;
+  total_cost_inr: number;
+  parts: AssetRepairPart[];
+  complaint_ticket?: string;
+  complaint_title?: string;
+}
+
+export interface AssetHistoryStats {
+  repair_count: number;
+  total_downtime_mins: number;
+  total_parts_cost_inr: number;
+  total_labour_cost_inr: number;
+  total_cost_inr: number;
+  avg_downtime_mins: number;
+  last_repair_at?: string | null;
+  days_since_last_repair?: number | null;
+  health_score: number;
+  health_label: 'CRITICAL' | 'WATCH' | 'SERVICED' | 'STABLE';
+}
+
+export interface AssetCurrentWorkOrder {
+  wo_number: string;
+  status: string;
+  priority_score?: number;
+  assigned_staff_code?: string | null;
+  technician_name?: string | null;
+  created_at: string;
+  age_minutes: number;
+  complaint_ticket?: string;
+  complaint_title?: string;
+}
+
+export interface AssetHistory {
+  asset: {
+    asset_code: string;
+    name: string;
+    asset_type: string;
+    status: 'OK' | 'DEGRADED' | 'FAULTY';
+    sku_code?: string | null;
+    installed_at?: string | null;
+    age_days?: number | null;
+    failure_count_30d: number;
+    space_code: string;
+    space_kind?: string;
+    space_name?: string;
+    block?: string;
+    floor?: number;
+  };
+  stats: AssetHistoryStats;
+  current_work_order?: AssetCurrentWorkOrder | null;
+  history: AssetRepairRecord[];
+  parts_summary: Array<{
+    sku_code: string;
+    name: string;
+    quantity: number;
+    spend_inr: number;
+    last_used_at?: string | null;
+  }>;
 }
 
 export interface ResourceLock {

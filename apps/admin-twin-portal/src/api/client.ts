@@ -6,6 +6,7 @@ import {
 } from '@nosih/supabase-client';
 import type {
   ApprovalPreflight,
+  AssetHistory,
   AuditEntry,
   AuditVerification,
   Booking,
@@ -333,6 +334,7 @@ function mapSpaceDetail(raw: Raw): SpaceDetail {
           id: str(asset.asset_code),
           asset_code: str(asset.asset_code),
           asset_type: str(asset.asset_type),
+          name: asset.name ? str(asset.name) : undefined,
           slot_index: num(asset.slot_index),
           status: (asset.status as 'OK' | 'DEGRADED' | 'FAULTY') ?? 'OK',
         }))
@@ -352,6 +354,88 @@ function mapSpaceDetail(raw: Raw): SpaceDetail {
           technician_name: item.technician_name ? str(item.technician_name) : undefined,
           notes: item.notes ? str(item.notes) : undefined,
           completed_at: str(item.completed_at),
+        }))
+      : [],
+  };
+}
+
+function mapAssetHistory(raw: Raw): AssetHistory {
+  const asset = (raw.asset as Raw) ?? {};
+  const stats = (raw.stats as Raw) ?? {};
+  const current = raw.current_work_order as Raw | null;
+  const optionalNumber = (value: unknown) => value === null || value === undefined || value === '' ? undefined : num(value);
+  return {
+    asset: {
+      asset_code: str(asset.asset_code),
+      name: str(asset.name),
+      asset_type: str(asset.asset_type),
+      status: (asset.status as AssetHistory['asset']['status']) ?? 'OK',
+      sku_code: asset.sku_code ? str(asset.sku_code) : null,
+      installed_at: asset.installed_at ? str(asset.installed_at) : null,
+      age_days: optionalNumber(asset.age_days) ?? null,
+      failure_count_30d: num(asset.failure_count_30d),
+      space_code: str(asset.space_code),
+      space_kind: asset.space_kind ? str(asset.space_kind) : undefined,
+      space_name: asset.space_name ? str(asset.space_name) : undefined,
+      block: asset.block ? str(asset.block) : undefined,
+      floor: asset.floor === null || asset.floor === undefined ? undefined : num(asset.floor),
+    },
+    stats: {
+      repair_count: num(stats.repair_count),
+      total_downtime_mins: num(stats.total_downtime_mins),
+      total_parts_cost_inr: num(stats.total_parts_cost_inr),
+      total_labour_cost_inr: num(stats.total_labour_cost_inr),
+      total_cost_inr: num(stats.total_cost_inr),
+      avg_downtime_mins: num(stats.avg_downtime_mins),
+      last_repair_at: stats.last_repair_at ? str(stats.last_repair_at) : null,
+      days_since_last_repair: optionalNumber(stats.days_since_last_repair) ?? null,
+      health_score: num(stats.health_score),
+      health_label: (stats.health_label as AssetHistory['stats']['health_label']) ?? 'STABLE',
+    },
+    current_work_order: current ? {
+      wo_number: str(current.wo_number),
+      status: str(current.status),
+      priority_score: current.priority_score === null || current.priority_score === undefined ? undefined : num(current.priority_score),
+      assigned_staff_code: current.assigned_staff_code ? str(current.assigned_staff_code) : null,
+      technician_name: current.technician_name ? str(current.technician_name) : null,
+      created_at: str(current.created_at),
+      age_minutes: num(current.age_minutes),
+      complaint_ticket: current.complaint_ticket ? str(current.complaint_ticket) : undefined,
+      complaint_title: current.complaint_title ? str(current.complaint_title) : undefined,
+    } : null,
+    history: Array.isArray(raw.history)
+      ? (raw.history as Raw[]).map((record) => ({
+          id: str(record.id),
+          completed_at: str(record.completed_at),
+          work_order_number: record.work_order_number ? str(record.work_order_number) : undefined,
+          fault_category: record.fault_category ? str(record.fault_category) : undefined,
+          action: str(record.action_taken),
+          technician_code: record.technician_code ? str(record.technician_code) : undefined,
+          technician_name: record.technician_name ? str(record.technician_name) : undefined,
+          technician_role: record.technician_role ? str(record.technician_role) : undefined,
+          downtime_mins: num(record.downtime_mins),
+          parts_cost_inr: num(record.parts_cost_inr),
+          labour_cost_inr: num(record.labour_cost_inr),
+          total_cost_inr: num(record.total_cost_inr),
+          parts: Array.isArray(record.parts)
+            ? (record.parts as Raw[]).map((part) => ({
+                sku_code: str(part.sku_code),
+                name: str(part.name),
+                qty: num(part.qty),
+                unit_cost_inr: num(part.unit_cost_inr),
+              }))
+            : [],
+          complaint_ticket: record.complaint_ticket ? str(record.complaint_ticket) : undefined,
+          complaint_title: record.complaint_title ? str(record.complaint_title) : undefined,
+        }))
+      : [],
+    parts_summary: Array.isArray(raw.parts_summary)
+      ? (raw.parts_summary as Raw[]).map((part) => ({
+          sku_code: str(part.sku_code),
+          name: str(part.name),
+          quantity: num(part.quantity),
+          spend_inr: num(part.spend_inr),
+          last_used_at: part.last_used_at ? str(part.last_used_at) : null,
         }))
       : [],
   };
@@ -535,6 +619,11 @@ export const api = {
       const raw = (await rpc.inspector(code)) as Raw;
       if (raw.error) throw new ApiError(str(raw.error), 404, raw);
       return mapSpaceDetail(raw);
+    },
+    assetHistory: async (assetCode: string): Promise<AssetHistory> => {
+      const raw = (await rpc.assetHistory(assetCode)) as Raw;
+      if (raw.error) throw new ApiError(str(raw.error), raw.error === 'FORBIDDEN' ? 403 : 404, raw);
+      return mapAssetHistory(raw);
     },
   },
 
