@@ -79,6 +79,7 @@ wrappers for every RPC used by the portals, including `aiChat`, `chatIntake`, `a
 | `scripts/load_ai_secrets.py` | push provider keys into Supabase Vault |
 | `scripts/realistic_timetable.py` | idempotent 2,700-slot rebuild (subjects, teachers, labs) |
 | `scripts/unique_student_identities.py` | unique student codes, names, class and department |
+| `scripts/seed_role_logins.py` | Supabase auth seats for department managers plus a demo faculty/lab-staff set (`--all` for every staff profile) |
 | `scripts/verify_*.py` | runnable PASS checks (see §9) |
 
 ---
@@ -101,13 +102,14 @@ actor from `auth.uid()`.
 
 ---
 
-## 3. Data model (33 tables)
+## 3. Data model (36 tables)
 
 **Campus** — `buildings` (5), `floors` (15), `distribution_boards` (30), `rooms` (90), `labs` (20),
 `canteens` (5), `bill_bots` (8), `assets` (2,748), `departments` (6).
 
-**Academic** — `student_classes` (90), `timetable_slots` (2,700), `exams` (24 seeded), `users` (5,351:
-5,175 students with `student_code`, 120 faculty, 40 lab staff, 12 technicians, admins).
+**Academic** — `student_classes` (90), `timetable_slots` (2,700), `exams` (24 seeded), `users` (5,357:
+5,175 students with `student_code`, 120 faculty, 40 lab staff, 12 technicians, 6 department managers,
+4 command administrators), `department_spaces` (172 department → space pairs derived from the timetable).
 
 **People** — `staff_profiles` (172, skills, risk clearance, shift, load), `users` (auth-linked when a
 login exists).
@@ -155,13 +157,20 @@ granted to `authenticated`.
 ## 5. Roles and separation of duties
 
 Student/Faculty submit and read; Lab Staff are operational readers; Maintenance completes and reserves
-parts; Department Manager reads their domain and approves up to ₹10,000; Incident Manager dispatches,
-relocates and moderates; Facilities Administrator dispatches, books, approves up to ₹10,000; Procurement
-Approver approves up to ₹100,000 and receives stock; System Administrator owns break-glass.
+parts; Department Manager reads their department's work orders, SLA clocks and purchase requests and
+approves up to ₹10,000 only for their own department; Incident Manager dispatches, relocates and
+moderates; Facilities Administrator dispatches, books, approves up to ₹10,000; Procurement Approver
+approves up to ₹100,000 and receives stock; System Administrator owns break-glass.
+
+Department scope is derived from `department_spaces` (the spaces a department actually teaches in),
+not from a hand-maintained list. Facilities, incident, procurement and system roles stay campus-wide.
+The audit ledger and the user directory remain closed to department managers even though `is_admin()`
+admits them to command-portal actions.
 
 Enforced invariants: actor resolved from session (forged emails are ignored), no self-approval, no
-work-order-assignee approval, dual approval above ₹100,000, override requires ≥20 characters plus a
-distinct counter-signer, break-glass requires a ≥25-character justification and writes an audit row.
+work-order-assignee approval, no cross-department manager approval, dual approval above ₹100,000,
+override requires ≥20 characters plus a distinct counter-signer, break-glass requires a ≥25-character
+justification and writes an audit row.
 
 ---
 
@@ -256,6 +265,7 @@ the procurement funnel.
 | `verify_email_intake.py` | EMAIL_INBOX channel, reporter binding, ack log, merge without a second WO |
 | `verify_scenarios.py` | RBAC, leak/power runs, idempotency, reset, exact asset restoration |
 | `verify_sla_integrity.py` | close/freeze on completion, reopen without double counts, defensive tick, strength revalidation |
+| `verify_rbac_matrix.py` | 8 role sign-ins, department-scoped work orders/SLA/PRs, audit and directory lockdown, forged-email denial, cross-department approval, self-approval |
 | `verify_chat.py` | question reaches the model, grounded codes, multi-turn, ownership guard |
 | `realistic_timetable.py` | rebuilds slots; reports collisions, load, labs |
 | `unique_student_identities.py` | unique names and `STU-…` codes per student |
@@ -266,7 +276,7 @@ All print `ALL PASS` on the live project.
 
 ## 10. Operations
 
-- Migrations `0001–0027` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Migrations `0001–0030` are applied in order with `apply_sql_file.py`; each is idempotent.
 - Vault secrets: `xai_api_key` (Groq `gsk_` keys auto-route to Groq, `xai-` to x.ai), optional
   `llm_model`, `nosih_vault_secret` for anonymous identities.
 - pg_cron jobs: `nosih-clock-tick` every minute (clock + SLA), `nosih-ai-maintenance` every minute.
@@ -281,9 +291,11 @@ All print `ALL PASS` on the live project.
 - Incidents and reservations have no persistent demo rows; bookings and complaints are created live.
 - `INBOUND_EMAIL_SECRET` is not installed on the project, so the live webhook route is not exercised;
   the email pipeline is verified directly (`verify_email_intake.py`).
-- Department Managers read campus-wide; department-scoped RLS is not implemented.
+- All six department managers have auth seats; only one faculty member per department and one lab
+  staff are seeded by default (`seed_role_logins.py --all` provisions the rest).
+- Repair approvals above ₹25,000 remain with Facilities/Procurement/System roles; department managers
+  approve purchase requests, not repair sign-off.
 - Notification delivery is simulated (`SENT` rows) with no retry worker.
-- Faculty and lab staff have no login accounts.
 - `services/nosih-api/app/engines` duplicates rules that now live in SQL; keep as reference only.
 
 ---
@@ -297,5 +309,5 @@ npm run dev:admin          # http://localhost:5174
 ```
 
 Portal env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. Server secrets stay in Vault.
-Sign in with a seeded student (`aids1a01@nosih.edu.in`) or an admin account; the seeded password is
-managed outside the repository.
+Sign in with a seeded student (`aids1a01@nosih.edu.in`), a department manager (`hod.cse@nosih.edu.in`)
+or an admin account; the seeded password is managed outside the repository.

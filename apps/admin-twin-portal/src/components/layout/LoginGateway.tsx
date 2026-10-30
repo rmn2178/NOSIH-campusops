@@ -3,7 +3,7 @@ import { ArrowRight, Box, CheckCircle2, Eye, EyeOff, LockKeyhole, ShieldCheck } 
 import { useAuthStore } from '../../store/authStore';
 import { Button, ErrorBanner } from '../ui';
 
-const roleNames = ['Maintenance Technician', 'Incident Manager', 'Facilities Administrator', 'Procurement Approver', 'System Administrator'];
+const roleNames = ['Maintenance Technician', 'Incident Manager', 'Facilities Administrator', 'Procurement Approver', 'Department Manager', 'System Administrator'];
 
 export function LoginGateway() {
   const { login, authenticating, error } = useAuthStore();
