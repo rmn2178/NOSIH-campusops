@@ -198,6 +198,11 @@ justification and writes an audit row.
 7. If the provider is unreachable the complaint still commits, a job is queued and pg_cron retries.
 8. `missing_info_questions` return with the first response; supplements re-run enrichment.
 
+**Comments** — every comment is moderated by the same model inside `rpc_post_comment`: factual
+frustration is published, a personal insult returns a polite rewrite the author can post in one click,
+and threats are withheld. The verdict and rewrite come from Groq via the Vault key; a keyword fallback
+only applies when the provider is unreachable.
+
 Asset suggestions are guarded: the model can only mark equipment the report actually mentions.
 
 ---
@@ -309,6 +314,7 @@ the procurement funnel.
 | `verify_staff_profile.py` | roster of 30 with identity and load, profile stats reconcile with the database, capped job/repair lists, unknown code 404, student denial |
 | `verify_sla_integrity.py` | close/freeze on completion, reopen without double counts, defensive tick, strength revalidation |
 | `verify_asset_history.py` | 50 priced repairs, parts/labour/total reconciliation, 24-hour downtime cap (a backdated 90-day ticket bills 1,440 min), open work order, empty record, RBAC and trigger pricing |
+| `verify_comment_ai.py` | Groq endpoint/model, model verdicts for a fair complaint and an insult, rewrite returned on the real comment RPC, held row kept out of the feed |
 | `verify_rbac_matrix.py` | 8 role sign-ins, department-scoped work orders/SLA/PRs, audit and directory lockdown, forged-email denial, cross-department approval, self-approval |
 | `verify_chat.py` | question reaches the model, grounded codes, multi-turn, ownership guard |
 | `realistic_timetable.py` | rebuilds slots; reports collisions, load, labs |
@@ -320,14 +326,18 @@ All print `ALL PASS` on the live project.
 
 ## 10. Operations
 
-- Migrations `0001–0039` are applied in order with `apply_sql_file.py`; each is idempotent.
+- Migrations `0001–0041` are applied in order with `apply_sql_file.py`; each is idempotent.
 - Document numbers (tickets, work orders, incidents) draw from one monotonic sequence with unique
   indexes, so the campus pulse cron can never collide with an interactive session — before migration
   `0034` a concurrent tick and submit could mint the same work-order number and price a repair at zero.
 - Vault secrets: `xai_api_key` (Groq `gsk_` keys auto-route to Groq, `xai-` to x.ai), optional
-  `llm_model`, `nosih_vault_secret` for anonymous identities.
+  `llm_model`, `nosih_vault_secret` for anonymous identities. Rotate the provider key with
+  `scripts/set_ai_key.py`, which prompts without echo and never writes the key to disk.
 - pg_cron jobs: `nosih-clock-tick` every minute (clock + SLA), `nosih-ai-maintenance` every minute,
   `nosih-campus-pulse` every minute (cadence-gated injections and optional auto-heal).
+- Pulse templates carry their own category, urgency, skill and clearance (migration `0041`), and the
+  model is skipped for `SIMULATION` rows: a scripted fan is always manageable, while canteen, smart
+  board, workstation and bill-bot faults stay major. Real intake still runs the model.
 - Seed realism polish (already applied to the live project): `f4_diversify_names.sql` reassigns
   faculty/lab-staff surnames across a 36-name pool, `f4_history_spread.sql` spreads the 50 priced
   maintenance records across the last 90 days.

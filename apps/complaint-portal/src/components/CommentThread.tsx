@@ -71,6 +71,8 @@ export function CommentThread({ complaint, onCommentAdded }: CommentThreadProps)
           ? current
           : [...current, result.comment]);
         setBody('');
+        setModeration(null);
+        setOriginalText('');
         onCommentAdded?.(complaint.id, result.comment.id);
       } else {
         setOriginalText(cleanText);

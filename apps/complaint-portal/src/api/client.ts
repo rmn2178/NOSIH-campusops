@@ -549,6 +549,7 @@ export const api = {
       return {
         moderation_status: data.moderation_status as ModerationRejectedResponse['moderation_status'],
         message: String(data.error ?? 'Held for moderation'),
+        suggested_polite_rewrite: data.suggested_polite_rewrite ? String(data.suggested_polite_rewrite) : null,
       };
     }
     return {
