@@ -9,6 +9,7 @@ import { AuditChainLedgerView } from './workspaces/AuditChainLedgerView';
 import { DispatchWorkspace } from './workspaces/DispatchWorkspace';
 import { ExternalIntegrationsConsole } from './workspaces/ExternalIntegrationsConsole';
 import { InventoryProcurementView } from './workspaces/InventoryProcurementView';
+import { AnalyticsWorkspace } from './workspaces/AnalyticsWorkspace';
 import { ModerationQueueView } from './workspaces/ModerationQueueView';
 import { SlaEscalationMonitor } from './workspaces/SlaEscalationMonitor';
 import { TimetableWorkspace } from './workspaces/TimetableWorkspace';
@@ -16,11 +17,11 @@ import { TwinWorkspace } from './workspaces/TwinWorkspace';
 
 const access: Record<Role, WorkspaceId[]> = {
   MAINTENANCE_TECHNICIAN: ['twin', 'dispatch', 'inventory', 'timetable'],
-  INCIDENT_MANAGER: ['twin', 'dispatch', 'sla', 'moderation', 'integrations', 'timetable', 'audit'],
-  FACILITIES_ADMIN: ['twin', 'dispatch', 'inventory', 'sla', 'integrations', 'timetable', 'audit'],
-  PROCUREMENT_APPROVER: ['twin', 'inventory', 'timetable', 'audit'],
-  SYSTEM_ADMIN: ['twin', 'dispatch', 'inventory', 'sla', 'moderation', 'integrations', 'timetable', 'audit'],
-  DEPARTMENT_MANAGER: ['twin', 'dispatch', 'inventory', 'sla', 'timetable', 'audit'],
+  INCIDENT_MANAGER: ['twin', 'dispatch', 'sla', 'moderation', 'integrations', 'timetable', 'audit', 'analytics'],
+  FACILITIES_ADMIN: ['twin', 'dispatch', 'inventory', 'sla', 'integrations', 'timetable', 'audit', 'analytics'],
+  PROCUREMENT_APPROVER: ['twin', 'inventory', 'timetable', 'audit', 'analytics'],
+  SYSTEM_ADMIN: ['twin', 'dispatch', 'inventory', 'sla', 'moderation', 'integrations', 'timetable', 'audit', 'analytics'],
+  DEPARTMENT_MANAGER: ['twin', 'dispatch', 'inventory', 'sla', 'timetable', 'audit', 'analytics'],
 };
 
 function CurrentWorkspace() {
@@ -33,6 +34,7 @@ function CurrentWorkspace() {
     case 'integrations': return <ExternalIntegrationsConsole />;
     case 'timetable': return <TimetableWorkspace />;
     case 'audit': return <AuditChainLedgerView />;
+    case 'analytics': return <AnalyticsWorkspace />;
     default: return <TwinWorkspace />;
   }
 }

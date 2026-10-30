@@ -14,7 +14,8 @@ export type WorkspaceId =
   | 'moderation'
   | 'integrations'
   | 'timetable'
-  | 'audit';
+  | 'audit'
+  | 'analytics';
 
 export interface User {
   id: string;

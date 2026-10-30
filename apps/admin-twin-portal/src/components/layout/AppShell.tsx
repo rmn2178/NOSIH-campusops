@@ -1,6 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import {
-  Activity, Archive, Boxes, CalendarRange, ChevronDown, ClipboardList, FileClock,
+  Activity, Archive, BarChart3, Boxes, CalendarRange, ChevronDown, ClipboardList, FileClock,
   GitPullRequestArrow, LogOut, Mail, Radio, ShieldAlert, X,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -29,6 +29,7 @@ const navigation: NavigationItem[] = [
   { id: 'moderation', label: 'Moderation & vault', shortLabel: 'Moderation', icon: ShieldAlert, roles: ['INCIDENT_MANAGER', 'SYSTEM_ADMIN'] },
   { id: 'integrations', label: 'External integrations', shortLabel: 'Integrations', icon: Mail, roles: ['INCIDENT_MANAGER', 'FACILITIES_ADMIN', 'SYSTEM_ADMIN'] },
   { id: 'timetable', label: 'Timetable engine', shortLabel: 'Timetable', icon: CalendarRange, roles: allRoles },
+  { id: 'analytics', label: 'Campus analytics', shortLabel: 'Analytics', icon: BarChart3, roles: ['INCIDENT_MANAGER', 'FACILITIES_ADMIN', 'PROCUREMENT_APPROVER', 'SYSTEM_ADMIN', 'DEPARTMENT_MANAGER'] },
   { id: 'audit', label: 'Audit ledger', shortLabel: 'Audit', icon: ClipboardList, roles: ['INCIDENT_MANAGER', 'FACILITIES_ADMIN', 'PROCUREMENT_APPROVER', 'SYSTEM_ADMIN'] },
 ];
 
