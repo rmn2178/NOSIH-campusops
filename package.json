@@ -12,9 +12,6 @@
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },
-  "devDependencies": {
-    "@rollup/rollup-win32-x64-msvc": "4.66.0"
-  },
   "engines": {
     "node": ">=20"
   }
