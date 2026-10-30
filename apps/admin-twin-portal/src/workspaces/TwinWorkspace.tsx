@@ -86,7 +86,7 @@ export function TwinWorkspace() {
     <section className="cloth-panel absolute bottom-4 left-4 z-20 w-[310px] rounded-2xl p-4">
       <div className="flex items-center justify-between"><div className="flex items-center gap-2"><Layers3 className="h-4 w-4" /><p className="text-[10px] font-semibold uppercase tracking-[.14em]">Floor separation</p></div><span className="mono text-[10px]">{floorExplode.toFixed(2)}×</span></div>
       <div className="mt-3 flex items-center gap-3"><Expand className="h-3.5 w-3.5 rotate-90 text-stone" /><input aria-label="Explode building floors" type="range" min="0" max="3.5" step="0.05" value={floorExplode} onChange={(event) => setFloorExplode(Number(event.target.value))} className="w-full" /></div>
-      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 border-t border-stitch pt-3">{[['Healthy', '#4ADE80'], ['Faulty', '#F87171'], ['Degraded', '#F59E0B'], ['Parts hold', '#A855F7']].map(([label, color]) => <span key={label} className="flex items-center gap-1.5 text-[9px] text-stone"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />{label}</span>)}</div>
+      <div className="mt-3 flex flex-wrap gap-x-3 gap-y-2 border-t border-stitch pt-3">{[['Healthy', '#4ADE80'], ['Manageable', '#FB923C'], ['Major', '#F87171'], ['Parts hold', '#A855F7']].map(([label, color]) => <span key={label} className="flex items-center gap-1.5 text-[9px] text-stone"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />{label}</span>)}</div>
     </section>
 
     <div className="pointer-events-none absolute bottom-5 right-5 z-20 mr-0"><Badge tone="neutral" className="bg-white/80">Drag to orbit · Scroll to zoom · Click a space to inspect</Badge></div>

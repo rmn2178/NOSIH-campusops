@@ -9,7 +9,7 @@ import type { CampusNodeLayout } from './campusLayout';
 const stateColors = {
   HEALTHY: { body: '#ECFDF5', emissive: '#4ADE80', edge: '#86EFAC' },
   FAULTY: { body: '#FEE2E2', emissive: '#F87171', edge: '#EF4444' },
-  DEGRADED: { body: '#FDE68A', emissive: '#F59E0B', edge: '#FBBF24' },
+  DEGRADED: { body: '#FDBA74', emissive: '#FB923C', edge: '#F97316' },
   BLOCKED_PARTS: { body: '#FEE2E2', emissive: '#F87171', edge: '#A855F7' },
 };
 
@@ -33,7 +33,7 @@ export function ClassroomNode3D({ layout, space, selected, onSelect }: {
 
   useFrame(({ clock }) => {
     if (material.current) {
-      const pulse = status === 'FAULTY' || status === 'BLOCKED_PARTS' ? 0.55 + Math.sin(clock.elapsedTime * 3.5) * 0.28 : 0.16;
+      const pulse = status === 'FAULTY' || status === 'BLOCKED_PARTS' ? 0.55 + Math.sin(clock.elapsedTime * 3.5) * 0.28 : status === 'DEGRADED' ? 0.34 : 0.12;
       material.current.color.lerp(targetColor, 0.08);
       material.current.emissive.lerp(targetEmissive, 0.08);
       material.current.emissiveIntensity = selected ? 0.65 : pulse;
