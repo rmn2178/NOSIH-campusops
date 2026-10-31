@@ -45,7 +45,25 @@ def main() -> None:
             cur.execute("select id from public.purchase_requests where status = 'PENDING_APPROVAL' order by id limit 1")
             pr = cur.fetchone()[0]
             cur.execute("select id from public.work_orders where status = 'PENDING_ASSIGNMENT' order by id limit 1")
-            wo = cur.fetchone()[0]
+            wo = cur.fetchone()
+            if wo is None:
+                # New work orders are appointed automatically, so this gate
+                # creates its own job and releases it back to the queue.
+                cur.execute(
+                    "insert into public.work_orders (wo_number, space_code, priority_score, required_skill, "
+                    "required_risk_clearance, status, target_asset_codes_json, estimated_cost_inr, "
+                    "reassignment_count, assignment_score_breakdown_json, created_at) "
+                    "values ('WO-2026-9103', 'C4-04', 60, 'ELECTRICAL', 'STANDARD', 'PENDING_ASSIGNMENT', "
+                    "'[]', 0, 0, '{}'::jsonb, now()) returning id"
+                )
+                wo_id = cur.fetchone()[0]
+                cur.execute(
+                    "update public.work_orders set assigned_staff_code = null, status = 'PENDING_ASSIGNMENT' "
+                    "where id = %s",
+                    (wo_id,),
+                )
+            else:
+                wo_id = wo[0]
             cur.execute("select staff_code from public.staff_profiles where staff_category = 'MAINTENANCE_TECH' order by staff_code limit 1")
             staff = cur.fetchone()[0]
 
@@ -60,13 +78,13 @@ def main() -> None:
 
             cur.execute(
                 "select public.rpc_assign_or_rebalance_staff(%s, %s, %s, 'FACILITIES_ADMIN', false, null)",
-                (wo, staff, FORGED_EMAIL),
+                (wo_id, staff, FORGED_EMAIL),
             )
             result = cur.fetchone()[0]
             check("student cannot assign staff with forged email",
                   result.get("success") is False and result.get("error") == "FORBIDDEN", result)
 
-            cur.execute("select public.rpc_complete_work_order(%s, 'forged completion attempt', %s)", (wo, FORGED_EMAIL))
+            cur.execute("select public.rpc_complete_work_order(%s, 'forged completion attempt', %s)", (wo_id, FORGED_EMAIL))
             result = cur.fetchone()[0]
             check("student cannot complete a work order with forged email",
                   result.get("success") is False and result.get("error") == "FORBIDDEN", result)

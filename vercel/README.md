@@ -79,8 +79,12 @@ npx vercel --prod     # production
 
 - Sign in once on the Vercel domain; Supabase sessions are per-origin.
 - The feed opens on **Active reports**: C1-02 (front-row fan and light), BOT-03
-  (bill bot rerouted to BOT-04) and LAB-PHYS-04 (bench 14). Resolved history is
-  one status filter away.
+  (bill bot rerouted to BOT-04) and LAB-PHYS-04 (bench 14). Every ticket names
+  the area officer who owns it.
+- Faculty and staff also get **Book a room** (`/bookings`): live availability
+  for every healthy room, a six-period grid that respects the timetable, exams
+  and other bookings, alternative rooms when a window is taken, and their own
+  bookings with cancel. Students never see the entry.
 - Check the feed, open a ticket's comments page, and file one test report.
 - After changing this folder, redeploy so the production domain picks up the
   new build.

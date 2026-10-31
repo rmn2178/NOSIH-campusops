@@ -73,13 +73,15 @@ def main() -> None:
         check("AI engine recorded", "ai_engine" in (extracted or ""), (extracted or "")[:80])
         check("no equipment falsely flagged for a plumbing leak", "LED-A1-02" not in (extracted or ""), (extracted or "")[:120])
 
-        cur.execute("""select id, status, required_skill, priority_score, target_asset_codes_json
+        cur.execute("""select id, status, required_skill, priority_score, target_asset_codes_json,
+                               assigned_staff_code
                          from public.work_orders where complaint_id = %s""", (cid,))
         row = cur.fetchone()
         check("work order created", row is not None)
         if row:
-            wo_id, wo_status, skill, priority, assets = row
-            check("work order pending assignment", wo_status == "PENDING_ASSIGNMENT", wo_status)
+            wo_id, wo_status, skill, priority, assets, officer_code = row
+            check("work order already carries an officer", wo_status == "ASSIGNED" and officer_code is not None,
+                  (wo_status, officer_code))
             check("work order skill is plumbing", skill == "PLUMBING", skill)
             check("priority reflects urgency", float(priority) >= 50, priority)
 

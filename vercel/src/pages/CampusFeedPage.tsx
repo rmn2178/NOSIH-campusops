@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Check, ChevronDown, FilePlus2, Filter, MessageSquareText, RefreshCw, SlidersHorizontal, Wifi, WifiOff, X } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, FilePlus2, Filter, MessageSquareText, RefreshCw, SlidersHorizontal, Wifi, WifiOff, X } from 'lucide-react';
 import { api } from '../api/client';
 import type { Complaint, ComplaintFilters, ComplaintStatus } from '../api/client';
 import { connectPortalSocket } from '../api/websocket';
@@ -188,7 +188,12 @@ export function CampusFeedPage() {
           <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">Campus community feed</h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-stone">Verified facility reports, shared observations, and live response status across campus.</p>
         </div>
-        <Link to="/complaints/new" className="btn-primary self-start sm:self-auto"><FilePlus2 size={17} /> New complaint</Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {user && user.role !== 'STUDENT' && (
+            <Link to="/bookings" className="btn-secondary self-start sm:self-auto"><CalendarDays size={17} /> Reserve a room</Link>
+          )}
+          <Link to="/complaints/new" className="btn-primary self-start sm:self-auto"><FilePlus2 size={17} /> New complaint</Link>
+        </div>
       </motion.header>
 
       <section className="cloth-card mt-8 p-3 sm:p-4" aria-label="Feed filters">

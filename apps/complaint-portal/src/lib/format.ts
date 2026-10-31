@@ -65,3 +65,11 @@ export function slaLabel(complaint: { sla_breach_state?: string | null; sla_due_
   const minutes = Math.ceil(remaining / 60_000);
   return minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m left` : `${minutes}m left`;
 }
+
+/** The area an officer covers: a block letter, the lab wing or the campus. */
+export function areaLabel(area: string | null | undefined): string {
+  if (!area) return 'Campus';
+  if (area === 'LAB_WING') return 'Lab wing';
+  if (area.length === 1) return `Block ${area}`;
+  return area.replaceAll('_', ' ');
+}

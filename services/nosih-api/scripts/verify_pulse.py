@@ -182,14 +182,14 @@ def main() -> None:
                   and row[4] == "CANTEEN", row)
             row = fetch_one(
                 cur,
-                "select w.status, w.required_skill, c.visual_state, a.status"
+                "select w.status, w.required_skill, c.visual_state, a.status, w.assigned_staff_code"
                 " from public.work_orders w"
                 " join public.canteens c on c.code = w.space_code"
                 " join public.assets a on a.asset_code = %s"
                 " where w.complaint_id = (select id from public.complaints where ticket_number = %s)",
                 (canteen["asset_code"], canteen["ticket_number"],))
             check("P12 canteen twin damaged and work order routed",
-                  row[0] == "PENDING_ASSIGNMENT" and row[1] == "ELECTRICAL"
+                  row[0] == "ASSIGNED" and row[4] is not None and row[1] == "ELECTRICAL"
                   and row[2] in ("FAULTY", "DEGRADED") and row[3] == "FAULTY", row)
         else:
             check("P11 canteen fault classified through the real pipeline", False, "no canteen injection")

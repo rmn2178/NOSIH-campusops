@@ -95,8 +95,17 @@ def main():
         for res in ranks.values())
     check("W5 ranked order is score-descending", top_ok)
 
-    # -- Auto-assign the whole queue --------------------------------------------
-    pending = [j for j in jobs if j[3] == "PENDING_ASSIGNMENT"]
+    # -- Every open job already carries an officer -------------------------------
+    owned = cur.execute("""select count(*) from public.work_orders w
+                             where w.status in ('PENDING_ASSIGNMENT','ASSIGNED','IN_PROGRESS','BLOCKED_PARTS')
+                               and w.assigned_staff_code is null""").fetchone()[0]
+    check("W5b every open work order already carries an officer", owned == 0, owned)
+
+    # -- The administrator can still pull a job back into the queue -------------
+    released = make_wo(cur, "WO-2026-9003", "HVAC")
+    cur.execute("update public.work_orders set assigned_staff_code = null, status = 'PENDING_ASSIGNMENT' "
+                "where id = %s", (released,))
+    pending = [(released, "WO-2026-9003", "HVAC", "PENDING_ASSIGNMENT")]
     assigned = []
     for wo_id, number, skill, _ in pending:
         as_user(cur, ADMIN_UUID)
@@ -104,7 +113,8 @@ def main():
                   (wo_id, ADMIN_EMAIL))[0]
         as_postgres(cur)
         assigned.append((number, skill, res.get("success"), res.get("assigned_staff_code")))
-    check("W6 every pending job auto-assigns", pending and all(a[2] is True for a in assigned), assigned)
+    check("W6 a released job auto-assigns from the dispatch board",
+          pending and all(a[2] is True for a in assigned), assigned)
 
     skilled = cur.execute("""select count(*) from public.work_orders w
                                join public.staff_profiles sp on sp.staff_code = w.assigned_staff_code
@@ -118,12 +128,11 @@ def main():
     check("W8 capacity is never exceeded", overloaded == 0, overloaded)
 
     # -- Gates stay visible ------------------------------------------------------
-    hvac_job = next((j for j in jobs if j[2] == "HVAC"), None)
-    if hvac_job:
-        res = ranks[hvac_job[0]]
-        off = [u for u in res["unavailable_staff"] if u["staff_code"] == "MAINT-22"]
-        check("W9 off-shift technician rejected with the exact gate",
-              off and off[0]["failed_gate"] == "GATE_3_OFF_SHIFT", off)
+    hvac_job = make_wo(cur, "WO-2026-9004", "HVAC")
+    res = rank(cur, hvac_job)
+    off = [u for u in res["unavailable_staff"] if u["staff_code"] == "MAINT-22"]
+    check("W9 off-shift technician rejected with the exact gate",
+          off and off[0]["failed_gate"] == "GATE_3_OFF_SHIFT", off)
 
     plumb = make_wo(cur, "WO-2026-9001", "PLUMBING")
     res = rank(cur, plumb)
@@ -157,7 +166,7 @@ def main():
     as_user(cur, STUDENT_UUID)
     denied_summary = one(cur, "select public.rpc_workforce_summary()->>'error'")[0]
     denied_assign = one(cur, "select public.rpc_assign_or_rebalance_staff(%s, null,"
-                             " 'student@nosih.edu.in', 'STUDENT', true)->>'error'", (pending[0][0],))[0]
+                             " 'student@nosih.edu.in', 'STUDENT', true)->>'error'", (released,))[0]
     as_postgres(cur)
     check("W14 workforce summary and assignment denied to students",
           denied_summary == "FORBIDDEN" and denied_assign == "FORBIDDEN", (denied_summary, denied_assign))

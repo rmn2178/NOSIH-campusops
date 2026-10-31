@@ -7,6 +7,7 @@ import { useAuthStore } from './store/useAuthStore';
 
 const NewComplaintPage = lazy(() => import('./pages/NewComplaintPage').then((module) => ({ default: module.NewComplaintPage })));
 const ComplaintDetailPage = lazy(() => import('./pages/ComplaintDetailPage').then((module) => ({ default: module.ComplaintDetailPage })));
+const RoomBookingPage = lazy(() => import('./pages/RoomBookingPage').then((module) => ({ default: module.RoomBookingPage })));
 
 const pageFallback = (
   <div className="flex min-h-[50vh] items-center justify-center gap-3 text-sm text-stone" role="status">
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/feed" element={<CampusFeedPage />} />
         <Route path="/complaints/new" element={<Suspense fallback={pageFallback}><NewComplaintPage /></Suspense>} />
         <Route path="/complaints/:complaintId" element={<Suspense fallback={pageFallback}><ComplaintDetailPage /></Suspense>} />
+        <Route path="/bookings" element={<Suspense fallback={pageFallback}><RoomBookingPage /></Suspense>} />
       </Route>
       <Route path="*" element={<Navigate to="/feed" replace />} />
     </Routes>

@@ -1,8 +1,8 @@
 import { forwardRef } from 'react';
 import { motion } from 'framer-motion';
-import { ArrowUpRight, Clock3, Image as ImageIcon, LoaderCircle, MessageCircle, Users } from 'lucide-react';
+import { ArrowUpRight, Clock3, HardHat, Image as ImageIcon, LoaderCircle, MessageCircle, Users } from 'lucide-react';
 import type { Complaint } from '../api/client';
-import { formatDate, slaLabel, statusLabel, twinLabel, urgencyLabel } from '../lib/format';
+import { areaLabel, formatDate, slaLabel, statusLabel, twinLabel, urgencyLabel } from '../lib/format';
 import { StatusPill, toneForStatus } from './StatusPill';
 
 interface ComplaintCardProps {
@@ -58,6 +58,17 @@ export const ComplaintCard = forwardRef<HTMLElement, ComplaintCardProps>(functio
 
         {complaint.parent_ticket_number && (
           <p className="mt-4 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-[11px] text-purple-800">Merged into <span className="mono font-semibold">{complaint.parent_ticket_number}</span>; community confirmations raise the active ticket’s priority.</p>
+        )}
+
+        {complaint.officer?.full_name && (
+          <p className="mt-4 flex flex-wrap items-center gap-2 rounded-xl border border-stitch bg-silk/60 px-3 py-2 text-[10px] text-stone">
+            <HardHat size={12} className="shrink-0" />
+            <span className="uppercase tracking-wider">Area officer</span>
+            <span className="font-semibold text-ink">{complaint.officer.full_name}</span>
+            <span className="mono">{complaint.officer.primary_skill}</span>
+            <span>· {areaLabel(complaint.officer.area)}</span>
+            {complaint.officer.work_order_number && <span className="mono ml-auto opacity-70">{complaint.officer.work_order_number}</span>}
+          </p>
         )}
 
         <div className="mt-5 flex items-center gap-2 border-t border-stitch pt-4">

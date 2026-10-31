@@ -116,6 +116,12 @@ export const rpc = {
   listBookings: (from: string, limit = 50) =>
     supabase.rpc('rpc_list_bookings', { p_from: from, p_limit: limit }).then(unwrap),
 
+  bookableRooms: (date: string) =>
+    supabase.rpc('rpc_bookable_rooms', { p_date: date }).then(unwrap),
+
+  myBookings: (from: string, limit = 50) =>
+    supabase.rpc('rpc_my_bookings', { p_from: from, p_limit: limit }).then(unwrap),
+
   roomOccupancy: (spaceCode: string, from: string, to: string) =>
     supabase
       .rpc('rpc_get_room_occupancy', { p_space_code: spaceCode, p_from: from, p_to: to })

@@ -11,7 +11,7 @@ from pathlib import Path
 import psycopg
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.config import settings  # noqa: E402
+from _db import connect  # noqa: E402
 
 CHECKS: list[tuple[str, bool, str]] = []
 
@@ -21,8 +21,7 @@ def check(name: str, ok: bool, detail: str = "") -> None:
 
 
 def main() -> None:
-    url = settings.database_url.replace("postgresql+psycopg://", "postgresql://")
-    with psycopg.connect(url) as conn:
+    with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 "select auth_user_id, email, full_name, role from public.users "
@@ -33,15 +32,26 @@ def main() -> None:
                 raise SystemExit("no linked SYSTEM_ADMIN account")
             admin_id, email, name, role = admin
 
+            # The officer trigger appoints an owner the moment a work order is
+            # created, so this gate creates its own job and releases it back to
+            # the queue to exercise the administrator path.
             cur.execute(
-                "select id, wo_number, required_skill, required_risk_clearance "
-                "from public.work_orders where status = 'PENDING_ASSIGNMENT' "
-                "and assigned_staff_code is null order by priority_score desc limit 1"
+                "insert into public.work_orders (wo_number, space_code, priority_score, required_skill, "
+                "required_risk_clearance, status, target_asset_codes_json, estimated_cost_inr, "
+                "reassignment_count, assignment_score_breakdown_json, created_at) "
+                "values ('WO-2026-9101', 'C4-04', 70, 'ELECTRICAL', 'HIGH_VOLTAGE', 'PENDING_ASSIGNMENT', "
+                "'[]', 0, 0, '{}'::jsonb, now()) "
+                "returning id, wo_number, required_skill, required_risk_clearance"
             )
             wo = cur.fetchone()
             if not wo:
-                raise SystemExit("no pending work order to assign")
+                raise SystemExit("could not create a work order to assign")
             wo_id, wo_number, required_skill, required_risk = wo
+            cur.execute(
+                "update public.work_orders set assigned_staff_code = null, status = 'PENDING_ASSIGNMENT' "
+                "where id = %s",
+                (wo_id,),
+            )
             print(f"work order: {wo_number} · requires {required_skill}/{required_risk}")
 
             cur.execute(

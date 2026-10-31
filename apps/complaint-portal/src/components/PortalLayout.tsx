@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
-import { Building2, FilePlus2, LogOut, MessageSquareText } from 'lucide-react';
+import { Building2, CalendarDays, FilePlus2, LogOut, MessageSquareText } from 'lucide-react';
 import { useAuthStore } from '../store/useAuthStore';
 import { cx, roleLabel } from '../lib/format';
 import { AssistantPanel } from './AssistantPanel';
@@ -7,6 +7,7 @@ import { AssistantPanel } from './AssistantPanel';
 export function PortalLayout() {
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
+  const canBook = Boolean(user && user.role !== 'STUDENT');
 
   const handleLogout = () => {
     logout();
@@ -42,6 +43,15 @@ export function PortalLayout() {
               <FilePlus2 size={17} />
               <span className="hidden sm:inline">New complaint</span>
             </NavLink>
+            {canBook && (
+              <NavLink
+                to="/bookings"
+                className={({ isActive }) => cx('flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition', isActive ? 'bg-ink text-white' : 'text-stone hover:bg-white/60 hover:text-ink')}
+              >
+                <CalendarDays size={17} />
+                <span className="hidden sm:inline">Book a room</span>
+              </NavLink>
+            )}
           </nav>
 
           <div className="ml-auto flex min-w-0 items-center gap-3">

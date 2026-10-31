@@ -12,7 +12,7 @@ from pathlib import Path
 import psycopg
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.config import settings  # noqa: E402
+from _db import resilient_connect as connect  # noqa: E402
 
 failures: list[str] = []
 
@@ -28,13 +28,13 @@ def url() -> str:
 
 
 def actor(email: str) -> str:
-    with psycopg.connect(url()) as conn, conn.cursor() as cur:
+    with connect() as conn, conn.cursor() as cur:
         cur.execute("select auth_user_id from public.users where email = %s", (email,))
         return str(cur.fetchone()[0])
 
 
 def rpc(auth_id: str, asset_code: str) -> dict:
-    with psycopg.connect(url()) as conn, conn.cursor() as cur:
+    with connect() as conn, conn.cursor() as cur:
         cur.execute("select set_config('request.jwt.claims', %s, true)",
                     (json.dumps({"sub": auth_id, "role": "authenticated"}),))
         cur.execute("set local role authenticated")
@@ -46,7 +46,7 @@ def main() -> None:
     facilities = actor("facilities@nosih.edu.in")
     faculty = actor("fac001@nosih.edu.in")
 
-    with psycopg.connect(url()) as conn, conn.cursor() as cur:
+    with connect() as conn, conn.cursor() as cur:
         cur.execute("select count(*), count(*) filter (where total_cost_inr > 0), "
                     "round(sum(total_cost_inr), 2) from public.maintenance_history")
         rows, costed, total = cur.fetchone()
@@ -108,7 +108,7 @@ def main() -> None:
 
     # Fixtures move with the live queue: pick the primary asset of a currently
     # open work order, and an asset that has never been repaired.
-    with psycopg.connect(url()) as conn, conn.cursor() as cur:
+    with connect() as conn, conn.cursor() as cur:
         cur.execute("""select w.wo_number, w.status,
                               jsonb_array_elements_text(w.target_asset_codes_json::jsonb) as asset
                          from public.work_orders w
@@ -142,7 +142,7 @@ def main() -> None:
     check("unknown asset is rejected", missing.get("error") == "ASSET_NOT_FOUND", missing)
 
     # The insert trigger prices a new repair from the technician and downtime.
-    with psycopg.connect(url()) as conn, conn.cursor() as cur:
+    with connect() as conn, conn.cursor() as cur:
         cur.execute("select wo_number, assigned_staff_code, space_code from public.work_orders "
                     "where assigned_staff_code is not null and status not in ('COMPLETED','CLOSED') "
                     "order by id desc limit 1")
@@ -164,7 +164,7 @@ def main() -> None:
 
     # A ticket raised months ago must not bill months of labour: completion
     # clamps downtime to 24 hours before pricing the repair.
-    with psycopg.connect(url()) as conn, conn.cursor() as cur:
+    with connect() as conn, conn.cursor() as cur:
         cur.execute("select w.id, w.wo_number, sp.hourly_cost_inr "
                     "from public.work_orders w "
                     "join public.staff_profiles sp on sp.staff_code = w.assigned_staff_code "

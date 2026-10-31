@@ -52,6 +52,25 @@ def database_url() -> str:
     return url
 
 
+def resilient_connect(**kwargs) -> psycopg.Connection:
+    """Connect to the direct host when it resolves, to the pooler when it does
+    not. Scripts that build their own connection string use this instead."""
+    url = database_url()
+    try:
+        return psycopg.connect(url, **kwargs)
+    except psycopg.OperationalError:
+        parts = urlsplit(url)
+        if not parts.password or not parts.hostname or not parts.hostname.startswith("db."):
+            raise
+        project = parts.hostname.removeprefix("db.").removesuffix(".supabase.co")
+        netloc = (
+            f"postgres.{project}:{parts.password}"
+            f"@aws-0-eu-west-1.pooler.supabase.com:{parts.port or 5432}"
+        )
+        pooled = urlunsplit((parts.scheme, netloc, parts.path, parts.query, ""))
+        return psycopg.connect(pooled, **kwargs)
+
+
 def connect(timeout: int = 15) -> psycopg.Connection:
     url = database_url()
     try:
@@ -67,3 +86,23 @@ def connect(timeout: int = 15) -> psycopg.Connection:
         )
         pooled = urlunsplit((parts.scheme, netloc, parts.path, parts.query, ""))
         return psycopg.connect(pooled, connect_timeout=timeout + 15, sslmode="require")
+
+
+def sqlalchemy_url() -> str:
+    """The connection string that answers right now: direct host when it
+    resolves, the Supavisor pooler when it does not. SQLAlchemy engines in the
+    verification scripts use this instead of the raw setting."""
+    url = database_url()
+    try:
+        psycopg.connect(url, connect_timeout=8).close()
+        return url
+    except psycopg.OperationalError:
+        parts = urlsplit(url)
+        if not parts.password or not parts.hostname or not parts.hostname.startswith("db."):
+            raise
+        project = parts.hostname.removeprefix("db.").removesuffix(".supabase.co")
+        netloc = (
+            f"postgres.{project}:{parts.password}"
+            f"@aws-0-eu-west-1.pooler.supabase.com:{parts.port or 5432}"
+        )
+        return urlunsplit((parts.scheme, netloc, parts.path, parts.query, ""))

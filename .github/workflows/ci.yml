@@ -84,6 +84,14 @@ jobs:
         if: env.DATABASE_URL != ''
         working-directory: services/nosih-api
         run: python scripts/verify_demo_curation.py
+      - name: Verify officer appointment and faculty booking
+        if: env.DATABASE_URL != ''
+        working-directory: services/nosih-api
+        run: python scripts/verify_officer_booking.py
+      - name: Verify the portal booking contract over HTTP
+        if: env.DATABASE_URL != ''
+        working-directory: services/nosih-api
+        run: python scripts/verify_portal_booking.py
       - name: Explain skipped live gate
         if: env.DATABASE_URL == ''
         run: echo "::notice::DATABASE_URL secret is not configured, so the live verification gate was skipped."

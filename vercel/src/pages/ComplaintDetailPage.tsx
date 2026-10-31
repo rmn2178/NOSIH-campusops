@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Clock3, LoaderCircle, MessageCircle, ShieldQuestion, Users } from 'lucide-react';
+import { ArrowLeft, Clock3, HardHat, LoaderCircle, MessageCircle, ShieldQuestion, Users } from 'lucide-react';
 import { api } from '../api/client';
 import type { Complaint } from '../api/client';
 import { CommentThread } from '../components/CommentThread';
 import { StatusPill, toneForStatus } from '../components/StatusPill';
-import { cx, formatDate, slaLabel, statusLabel, twinLabel, urgencyLabel } from '../lib/format';
+import { areaLabel, cx, formatDate, slaLabel, statusLabel, twinLabel, urgencyLabel } from '../lib/format';
 
 export function ComplaintDetailPage() {
   const { complaintId } = useParams<{ complaintId: string }>();
@@ -117,6 +117,21 @@ export function ComplaintDetailPage() {
 
           {complaint.parent_ticket_number && (
             <p className="mt-4 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2 text-[11px] text-purple-800">Merged into <span className="mono font-semibold">{complaint.parent_ticket_number}</span>; community confirmations raise the active ticket’s priority.</p>
+          )}
+
+          {complaint.officer?.full_name && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-stitch bg-silk/60 px-3 py-2.5">
+              <span className="flex h-8 w-8 items-center justify-center rounded-full border border-stitch bg-white"><HardHat size={14} className="text-stone" /></span>
+              <div className="min-w-0">
+                <p className="text-xs font-semibold">{complaint.officer.full_name}</p>
+                <p className="mt-0.5 text-[9px] uppercase tracking-wider text-stone">
+                  Area officer · {complaint.officer.primary_skill} · {areaLabel(complaint.officer.area)}
+                </p>
+              </div>
+              {complaint.officer.work_order_number && (
+                <span className="mono ml-auto rounded-lg border border-stitch bg-white px-2 py-1 text-[10px] text-stone">{complaint.officer.work_order_number}</span>
+              )}
+            </div>
           )}
 
           <div className="mt-5 flex items-center gap-2 border-t border-stitch pt-4">

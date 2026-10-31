@@ -26,6 +26,83 @@ export type Urgency = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type ComplaintStatus = 'OPEN' | 'IN_PROGRESS' | 'BLOCKED_PARTS' | 'RESOLVED';
 export type ModerationStatus = 'APPROVED' | 'NEEDS_REWRITE' | 'HELD_ABUSIVE' | 'HELD_HARMFUL';
 export type TwinState = 'HEALTHY' | 'FAULTY' | 'DEGRADED' | 'BLOCKED_PARTS';
+export type SlotState = 'FREE' | 'CLASS' | 'EXAM' | 'BOOKING';
+
+export interface ComplaintOfficer {
+  staff_code: string;
+  full_name: string;
+  primary_skill: string;
+  area: string;
+  work_order_number?: string;
+  work_order_status?: string;
+  assigned_at?: string;
+  assigned_jobs?: number;
+  max_jobs?: number;
+}
+
+export interface RoomSlot {
+  period_number: number;
+  starts_at: string;
+  ends_at: string;
+  state: SlotState;
+  label: string | null;
+  owner: string | null;
+  student_strength: number | null;
+}
+
+export interface BookableRoom {
+  room_code: string;
+  capacity: number;
+  block: string;
+  floor_number: number;
+  slots: RoomSlot[];
+}
+
+export interface FacultyBooking {
+  id: string;
+  space_code: string;
+  class_code?: string | null;
+  purpose: string;
+  starts_at: string;
+  ends_at: string;
+  status: 'ACTIVE' | 'CANCELLED';
+  booked_by_name?: string | null;
+  department_code?: string | null;
+}
+
+export interface BookingConflict {
+  kind: 'CLASS' | 'EXAM' | 'BOOKING';
+  label: string;
+  owner?: string | null;
+  class_code?: string | null;
+  period_number?: number;
+  student_strength?: number;
+  starts_at: string;
+  ends_at: string;
+}
+
+export interface BookingAlternative {
+  room_code: string;
+  capacity: number;
+}
+
+export interface BookingOutcome {
+  success: boolean;
+  error?: string;
+  reason?: string;
+  booking_id?: string;
+  space_code?: string;
+  starts_at?: string;
+  ends_at?: string;
+  status?: string;
+  idempotent?: boolean;
+  already_cancelled?: boolean;
+  conflicts?: BookingConflict[];
+  alternatives?: BookingAlternative[];
+  student_strength?: number;
+  room_capacity?: number;
+  visual_state?: string;
+}
 
 export interface SessionProfile {
   id: string;
@@ -36,6 +113,7 @@ export interface SessionProfile {
   year_number: 1 | 2 | 3 | null;
   section: string | null;
   home_room_code: string | null;
+  class_code?: string | null;
   role: 'STUDENT' | 'FACULTY' | 'STAFF';
 }
 
@@ -145,6 +223,7 @@ export interface Complaint {
   sla_target_minutes: number;
   sla_due_at?: string | null;
   sla_breach_state?: 'ON_TRACK' | 'WARNING_75' | 'BREACHED_100' | 'PAUSED' | null;
+  officer?: ComplaintOfficer | null;
   created_at: string;
   updated_at: string;
   parent_complaint_id?: string | null;
@@ -281,6 +360,7 @@ function mapProfile(raw: Record<string, unknown>): SessionProfile {
     year_number: isStudent && year ? (year as 1 | 2 | 3) : null,
     section: (raw.section as string) ?? null,
     home_room_code: (raw.home_room_code as string) ?? null,
+    class_code: (raw.class_code as string) ?? (raw.assigned_class_code as string) ?? null,
     role: isStudent ? 'STUDENT' : raw.role === 'FACULTY' ? 'FACULTY' : 'STAFF',
   };
 }
@@ -322,6 +402,25 @@ export function mapComplaint(raw: Record<string, unknown>): Complaint {
     sla_target_minutes: Number(raw.sla_target_minutes ?? 1440),
     sla_due_at: (raw.sla_due_at as string) ?? null,
     sla_breach_state: (raw.sla_breach_state as Complaint['sla_breach_state']) ?? null,
+    officer: raw.officer && typeof raw.officer === 'object'
+      ? {
+          staff_code: String((raw.officer as Record<string, unknown>).staff_code ?? ''),
+          full_name: String((raw.officer as Record<string, unknown>).full_name ?? ''),
+          primary_skill: String((raw.officer as Record<string, unknown>).primary_skill ?? ''),
+          area: String((raw.officer as Record<string, unknown>).area ?? ''),
+          work_order_number: (raw.officer as Record<string, unknown>).work_order_number
+            ? String((raw.officer as Record<string, unknown>).work_order_number)
+            : undefined,
+          work_order_status: (raw.officer as Record<string, unknown>).work_order_status
+            ? String((raw.officer as Record<string, unknown>).work_order_status)
+            : undefined,
+          assigned_at: (raw.officer as Record<string, unknown>).assigned_at
+            ? String((raw.officer as Record<string, unknown>).assigned_at)
+            : undefined,
+          assigned_jobs: Number((raw.officer as Record<string, unknown>).assigned_jobs ?? 0),
+          max_jobs: Number((raw.officer as Record<string, unknown>).max_jobs ?? 0),
+        }
+      : null,
     created_at: String(raw.created_at),
     updated_at: String(raw.updated_at ?? raw.created_at),
     parent_complaint_id: raw.parent_complaint_id ? String(raw.parent_complaint_id) : null,
@@ -377,6 +476,42 @@ function mapSpace(raw: Record<string, unknown>): SpaceDetails {
 }
 
 let complaintsInFlight: { key: string; promise: Promise<Complaint[]> } | null = null;
+
+function mapBookingOutcome(raw: Record<string, unknown>): BookingOutcome {
+  return {
+    success: Boolean(raw.success),
+    error: raw.error ? String(raw.error) : undefined,
+    reason: raw.reason ? String(raw.reason) : undefined,
+    booking_id: raw.booking_id ? String(raw.booking_id) : undefined,
+    space_code: raw.space_code ? String(raw.space_code) : undefined,
+    starts_at: raw.starts_at ? String(raw.starts_at) : undefined,
+    ends_at: raw.ends_at ? String(raw.ends_at) : undefined,
+    status: raw.status ? String(raw.status) : undefined,
+    idempotent: Boolean(raw.idempotent),
+    already_cancelled: Boolean(raw.already_cancelled),
+    conflicts: Array.isArray(raw.conflicts)
+      ? (raw.conflicts as Array<Record<string, unknown>>).map((conflict) => ({
+          kind: String(conflict.kind ?? 'CLASS') as BookingConflict['kind'],
+          label: String(conflict.label ?? ''),
+          owner: conflict.owner ? String(conflict.owner) : null,
+          class_code: conflict.class_code ? String(conflict.class_code) : null,
+          period_number: conflict.period_number ? Number(conflict.period_number) : undefined,
+          student_strength: conflict.student_strength ? Number(conflict.student_strength) : undefined,
+          starts_at: String(conflict.starts_at ?? ''),
+          ends_at: String(conflict.ends_at ?? ''),
+        }))
+      : undefined,
+    alternatives: Array.isArray(raw.alternatives)
+      ? (raw.alternatives as Array<Record<string, unknown>>).map((alternative) => ({
+          room_code: String(alternative.room_code),
+          capacity: Number(alternative.capacity ?? 0),
+        }))
+      : undefined,
+    student_strength: raw.student_strength ? Number(raw.student_strength) : undefined,
+    room_capacity: raw.room_capacity ? Number(raw.room_capacity) : undefined,
+    visual_state: raw.visual_state ? String(raw.visual_state) : undefined,
+  };
+}
 
 export const api = {
   login: async (body: LoginRequest): Promise<LoginResponse> => {
@@ -586,5 +721,71 @@ export const api = {
       moderation_status: 'APPROVED',
       comment: mapComment(data.comment as Record<string, unknown>),
     };
+  },
+
+  bookings: {
+    rooms: async (date: string): Promise<BookableRoom[]> => {
+      const rows = (await rpc.bookableRooms(date)) as Array<Record<string, unknown>>;
+      return rows.map((row) => ({
+        room_code: String(row.room_code),
+        capacity: Number(row.capacity ?? 0),
+        block: String(row.block ?? ''),
+        floor_number: Number(row.floor_number ?? 0),
+        slots: Array.isArray(row.slots)
+          ? (row.slots as Array<Record<string, unknown>>).map((slot) => ({
+              period_number: Number(slot.period_number ?? 0),
+              starts_at: String(slot.starts_at),
+              ends_at: String(slot.ends_at),
+              state: (String(slot.state ?? 'FREE') as SlotState),
+              label: slot.label ? String(slot.label) : null,
+              owner: slot.owner ? String(slot.owner) : null,
+              student_strength: slot.student_strength ? Number(slot.student_strength) : null,
+            }))
+          : [],
+      }));
+    },
+
+    mine: async (): Promise<FacultyBooking[]> => {
+      const from = new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString();
+      const rows = (await rpc.myBookings(from, 50)) as Array<Record<string, unknown>>;
+      return rows.map((row) => ({
+        id: String(row.id),
+        space_code: String(row.space_code),
+        class_code: row.class_code ? String(row.class_code) : null,
+        purpose: String(row.purpose ?? 'Booked room'),
+        starts_at: String(row.starts_at),
+        ends_at: String(row.ends_at),
+        status: (String(row.status ?? 'ACTIVE') as FacultyBooking['status']),
+        booked_by_name: row.booked_by_name ? String(row.booked_by_name) : null,
+        department_code: row.department_code ? String(row.department_code) : null,
+      }));
+    },
+
+    create: async (payload: {
+      spaceCode: string;
+      startsAt: string;
+      endsAt: string;
+      purpose: string;
+      classCode?: string | null;
+      requestKey?: string | null;
+    }): Promise<BookingOutcome> => {
+      const profile = await loadProfile();
+      const raw = (await rpc.createBooking({
+        spaceCode: payload.spaceCode,
+        startsAt: payload.startsAt,
+        endsAt: payload.endsAt,
+        purpose: payload.purpose,
+        classCode: payload.classCode ?? null,
+        email: String(profile.email),
+        requestKey: payload.requestKey ?? null,
+      })) as Record<string, unknown>;
+      return mapBookingOutcome(raw);
+    },
+
+    cancel: async (bookingId: number): Promise<BookingOutcome> => {
+      const profile = await loadProfile();
+      const raw = (await rpc.cancelBooking(bookingId, String(profile.email))) as Record<string, unknown>;
+      return mapBookingOutcome(raw);
+    },
   },
 };

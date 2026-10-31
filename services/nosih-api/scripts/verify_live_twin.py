@@ -8,7 +8,7 @@ from pathlib import Path
 import psycopg
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.config import settings  # noqa: E402
+from _db import resilient_connect as connect  # noqa: E402
 
 failures: list[str] = []
 
@@ -32,8 +32,7 @@ def snapshot(cur, period: int) -> tuple[str, int, list[str]]:
 
 
 def main() -> None:
-    url = settings.database_url.replace("postgresql+psycopg://", "postgresql://")
-    with psycopg.connect(url, autocommit=True) as conn:
+    with connect(autocommit=True) as conn:
         with conn.cursor() as cur:
             p3_hash, p3_count, p3_codes = snapshot(cur, 3)
             p4_hash, p4_count, p4_codes = snapshot(cur, 4)

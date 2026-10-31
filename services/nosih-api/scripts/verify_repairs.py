@@ -8,7 +8,7 @@ from pathlib import Path
 import psycopg
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.config import settings  # noqa: E402
+from _db import connect  # noqa: E402
 
 ADMIN = "4642ba88-5b19-458e-b9c0-84e70e04f060"
 failures: list[str] = []
@@ -27,8 +27,7 @@ def as_admin(cur) -> None:
 
 
 def main() -> None:
-    url = settings.database_url.replace("postgresql+psycopg://", "postgresql://")
-    with psycopg.connect(url) as conn:
+    with connect() as conn:
         cur = conn.cursor()
 
         cur.execute("select count(*) from public.exams")

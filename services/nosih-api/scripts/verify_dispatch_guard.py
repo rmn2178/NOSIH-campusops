@@ -11,7 +11,7 @@ from pathlib import Path
 import psycopg
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from app.config import settings  # noqa: E402
+from _db import connect  # noqa: E402
 
 CHECKS: list[tuple[str, bool, str]] = []
 
@@ -49,8 +49,7 @@ def assign_checked(cur, wo_id: int, staff: str, email: str, role: str, expected:
 
 
 def main() -> None:
-    url = settings.database_url.replace("postgresql+psycopg://", "postgresql://")
-    with psycopg.connect(url) as conn:
+    with connect() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 "select auth_user_id, email, full_name, role from public.users "
@@ -68,11 +67,21 @@ def main() -> None:
             cur.execute("select staff_code from public.staff_profiles sp join public.users u on u.id = sp.user_id where u.auth_user_id = %s limit 1", (tech_id,))
             tech_staff = cur.fetchone()[0]
 
+            # Work orders are appointed automatically now, so this gate creates
+            # its own job and releases it back to the queue for the guards.
             cur.execute(
-                "select id from public.work_orders where status = 'PENDING_ASSIGNMENT' "
-                "and assigned_staff_code is null order by priority_score desc limit 1"
+                "insert into public.work_orders (wo_number, space_code, priority_score, required_skill, "
+                "required_risk_clearance, status, target_asset_codes_json, estimated_cost_inr, "
+                "reassignment_count, assignment_score_breakdown_json, created_at) "
+                "values ('WO-2026-9102', 'C4-04', 70, 'ELECTRICAL', 'STANDARD', 'PENDING_ASSIGNMENT', "
+                "'[]', 0, 0, '{}'::jsonb, now()) returning id"
             )
             wo_id = cur.fetchone()[0]
+            cur.execute(
+                "update public.work_orders set assigned_staff_code = null, status = 'PENDING_ASSIGNMENT' "
+                "where id = %s",
+                (wo_id,),
+            )
 
             cur.execute(
                 "delete from public.resource_locks where resource_type = 'STAFF' and resource_id in "

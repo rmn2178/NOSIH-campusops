@@ -17,6 +17,7 @@ import psycopg
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.config import settings  # noqa: E402
+from _db import resilient_connect as connect  # noqa: E402
 
 PASSWORD = "Nosih@2026"
 results: list[tuple[str, bool, str]] = []
@@ -98,7 +99,7 @@ def main() -> None:
         return
 
     # Space mappings used as the expectation for scoped reads.
-    with psycopg.connect(database_url()) as conn, conn.cursor() as cur:
+    with connect() as conn, conn.cursor() as cur:
         cur.execute("select department_code, space_code from public.department_spaces")
         mapping: dict[str, set[str]] = {}
         for dept, space in cur.fetchall():
@@ -106,7 +107,7 @@ def main() -> None:
         cur.execute("select id, pr_number from public.purchase_requests order by id limit 1")
         probe_pr_id, probe_pr_number = cur.fetchone()
 
-    with psycopg.connect(database_url()) as conn, conn.cursor() as cur:
+    with connect() as conn, conn.cursor() as cur:
         cur.execute(
             "select email, id, auth_user_id from public.users "
             "where email in ('facilities@nosih.edu.in','procurement@nosih.edu.in',"
@@ -207,7 +208,7 @@ def main() -> None:
         "PROCUREMENT_APPROVER").get("error") == "PURCHASE_REQUEST_NOT_FOUND")
 
     # The FORBIDDEN attempt is audited under the real session actor.
-    with psycopg.connect(database_url()) as conn, conn.cursor() as cur:
+    with connect() as conn, conn.cursor() as cur:
         cur.execute(
             "select actor_email, actor_role, rule_fired from public.audit_logs "
             "where action = 'APPROVE_PURCHASE' and resource_id = %s "
@@ -227,7 +228,7 @@ def main() -> None:
     labstaff_user_id, _ = actors["labstf001@nosih.edu.in"]
 
     def probe_approval(requester_id: int, actor_email: str, actor_auth_id: str) -> dict:
-        with psycopg.connect(database_url()) as conn, conn.cursor() as cur:
+        with connect() as conn, conn.cursor() as cur:
             cur.execute("begin")
             try:
                 cur.execute("select sku_code, unit_cost_inr from public.inventory_items order by sku_code limit 1")

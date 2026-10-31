@@ -21,7 +21,7 @@ packages/
   supabase-client/          shared typed client: auth, RPC wrappers, realtime
 services/nosih-api/         Python seed generator, migrations runner, verification scripts
 supabase/
-  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0047)
+  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0050)
   functions/                optional Edge Functions (email webhook, SLA tick) — not required
 docs/screenshots/           reference captures
 README.md  Makefile  docker-compose.yml
@@ -62,6 +62,7 @@ README.md  Makefile  docker-compose.yml
 | `src/pages/CampusFeedPage.tsx` | live approved reports, filters, affected votes, comment-count handoff |
 | `src/pages/ComplaintDetailPage.tsx` | full ticket record with the live community thread and comment composer |
 | `src/pages/NewComplaintPage.tsx` | space picker, description, photo, submit |
+| `src/pages/RoomBookingPage.tsx` | faculty room calendar, live availability, booking, own bookings |
 | `src/components/AiFirstResponseCard.tsx` | classification result + clarification questions |
 | `src/components/AssistantPanel.tsx` | grounded Q&A over the live twin |
 | `src/components/ComplaintCard.tsx`, `CommentThread`, `ModerationRewriteModal` | thread UI |
@@ -84,6 +85,8 @@ wrappers for every RPC used by the portals, including `aiChat`, `chatIntake`, `a
 | `scripts/realistic_timetable.py` | idempotent 2,700-slot rebuild (subjects, teachers, labs) |
 | `scripts/unique_student_identities.py` | unique student codes, names, class and department |
 | `scripts/seed_role_logins.py` | Supabase auth seats for department managers plus a demo faculty/lab-staff set (`--all` for every staff profile) |
+| `scripts/f10_curate_demo.sql` | curated live state: three faults (classroom, lab bench, bill bot), the rest repaired |
+| `scripts/f11_demo_bookings.sql` | realistic faculty bookings for the coming week, exams moved to weekdays, area officers appointed |
 | `scripts/verify_*.py` | runnable PASS checks (see §9) |
 
 ---
@@ -318,6 +321,8 @@ the procurement funnel.
 | `verify_asset_history.py` | 50 priced repairs, parts/labour/total reconciliation, 24-hour downtime cap (a backdated 90-day ticket bills 1,440 min), open work order, empty record, RBAC and trigger pricing |
 | `verify_comment_ai.py` | Groq endpoint/model, model verdicts for a fair complaint and an insult, rewrite returned on the real comment RPC, held row kept out of the feed |
 | `verify_demo_curation.py` | demo gate: exactly three live tickets, C1-02 carries only the front-row fan and light, one lab bench, one bill bot rerouted to BOT-04, the rest repaired with history, feed defaults to active |
+| `verify_officer_booking.py` | every request gets an area officer (gates, area, audit), leave hands the job over, faculty booking accepted, double booking and class and capacity refused, students refused, retries idempotent |
+| `verify_portal_booking.py` | the browser contract over HTTP: faculty sign-in, room calendar, own bookings, a real booking and its release, officers in the feed |
 | `verify_ai_keys.py` | multi-key pool, Groq routing, key material and the raw HTTP helper denied to browser roles, successive model calls succeed while rotating keys |
 | `verify_rbac_matrix.py` | 8 role sign-ins, department-scoped work orders/SLA/PRs, audit and directory lockdown, forged-email denial, cross-department approval, self-approval |
 | `verify_chat.py` | question reaches the model, grounded codes, multi-turn, ownership guard |
@@ -338,7 +343,7 @@ service directory *and* an exported `DATABASE_URL`).
 |---|---|
 | `web` | `npm ci`, TypeScript typecheck for both portals, production build |
 | `api` | API unit tests, offline 27-table seed and SHA-256 audit chain (`verify_phase1.py`) |
-| `live` | manual only: runs `verify_all.py` and `verify_demo_curation.py` against the project when the `DATABASE_URL` secret exists |
+| `live` | manual only: runs `verify_all.py`, `verify_demo_curation.py`, `verify_officer_booking.py` and `verify_portal_booking.py` against the project when the `DATABASE_URL` secret exists |
 
 The live job is read/write but rolls every mutation back; add `DATABASE_URL` as a repository secret to
 enable it. Without the secret the job passes with a notice instead of failing.
@@ -351,12 +356,24 @@ enable it. Without the secret the job passes with a notice instead of failing.
   refresh; secondary pages and every admin workspace are lazy chunks (the sign-in gate no longer
   downloads three.js or recharts); the Vite config preconnects to `VITE_SUPABASE_URL` and an
   expired token now returns the shell to the sign-in gate instead of leaving panels on silent 401s.
-- Migrations `0001–0047` are applied in order with `apply_sql_file.py`; each is idempotent. The
+- Migrations `0001–0050` are applied in order with `apply_sql_file.py`; each is idempotent. The
   community feed defaults to `ACTIVE` reports; resolved history stays one filter away. The curated
   demo state (`scripts/f10_curate_demo.sql`) leaves three live tickets, each with a seeded
   conversation: C1-02 (front-row fan and light), LAB-PHYS-04 (bench 14) and BOT-03 (thermal head,
   rerouted to BOT-04). Every other ticket is repaired, every other fixture is operational, and the
   twin shows exactly three major faults.
+- Officer appointment (migration `0048`): a work order is owned the moment it is created, whatever
+  channel raised it. `nosih_rank_officers` applies the hard gates (skill, risk clearance, shift,
+  leave, capacity, resource lock) and then the area of the request, the officer's load and the SLA
+  urgency; the trigger appoints the winner, writes an `APPOINT_OFFICER` audit row and updates the
+  workload. `rpc_set_staff_availability` moves the job to the next ranked officer when a technician
+  goes on leave or off shift. The complaint payload carries the officer, so both portals name the
+  person who owns the fault.
+- Faculty room booking in the complaint portal: `/bookings` is visible to faculty and staff only.
+  `rpc_bookable_rooms(date)` returns every healthy room with its capacity and a six-period grid
+  built from the live timetable, the exam calendar and the booking register; `rpc_my_bookings()`
+  returns the signed-in user's own bookings. The server re-checks class, exam, booking, capacity and
+  window rules, and a request key makes a retried booking land on the same record.
 - Document numbers (tickets, work orders, incidents) draw from one monotonic sequence with unique
   indexes, so the campus pulse cron can never collide with an interactive session — before migration
   `0034` a concurrent tick and submit could mint the same work-order number and price a repair at zero.
@@ -373,7 +390,10 @@ enable it. Without the secret the job passes with a notice instead of failing.
 - Seed realism polish (already applied to the live project): `f4_diversify_names.sql` reassigns
   faculty/lab-staff surnames across a 36-name pool, `f4_history_spread.sql` spreads the 50 priced
   maintenance records across the last 90 days, and `f8_heal_orphan_assets.sql` restores failed
-  assets left behind by reverted demo runs.
+  assets left behind by reverted demo runs. `f11_demo_bookings.sql` moves the seeded exams to
+  weekdays, fills the coming week with realistic faculty bookings (capstone reviews, viva
+  preparation, an accreditation visit, placement panels) that never collide with a class, an exam
+  or another booking, and appoints the area officers for the three live faults.
 - Real edge cases: outside 09:00–15:00 IST the clock pins to P1; weekends freeze; scrubbing sets the
   clock to MANUAL until `rpc_set_clock_mode('LIVE')`.
 - Rotate any key or access token pasted into a chat.
