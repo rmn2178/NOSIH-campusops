@@ -90,6 +90,7 @@ function slotTone(slot: RoomSlot): string {
 
 export function RoomBookingPage() {
   const { user } = useAuthStore();
+  const canBook = Boolean(user && user.role !== 'STUDENT');
   const days = useMemo(() => teachingDays(), []);
   const [date, setDate] = useState(days[0]);
   const [rooms, setRooms] = useState<BookableRoom[]>([]);
@@ -396,6 +397,7 @@ export function RoomBookingPage() {
                     onChange={(event) => setPurpose(event.target.value)}
                     maxLength={80}
                     placeholder="Capstone review"
+                    disabled={!canBook}
                     className="field mt-1 py-2.5 text-sm"
                   />
                 </label>
@@ -406,17 +408,24 @@ export function RoomBookingPage() {
                     onChange={(event) => setClassCode(event.target.value)}
                     maxLength={20}
                     placeholder="AIDS-Y1-A"
+                    disabled={!canBook}
                     className="field mt-1 py-2.5 text-sm"
                   />
                 </label>
               </div>
 
               <div className="mt-4 flex flex-wrap items-center gap-3">
-                <button type="button" onClick={submit} disabled={busy || !window_} className="btn-primary">
+                <button type="button" onClick={submit} disabled={busy || !window_ || !canBook} className="btn-primary">
                   {busy ? 'Checking availability…' : window_ ? `Book ${room.room_code} · ${formatWindow(window_.startsAt, window_.endsAt)}` : 'Select a free period'}
                 </button>
                 <span className="text-[10px] text-stone">A request key makes a retried booking land on the same record.</span>
               </div>
+
+              {!canBook && (
+                <p className="mt-4 rounded-xl border border-stitch bg-silk px-3 py-2.5 text-[11px] text-stone">
+                  Your role can read the room calendar, but booking a room is for faculty and staff.
+                </p>
+              )}
 
               {result && !result.success && result.conflicts && result.conflicts.length > 0 && (
                 <ul className="mt-4 space-y-1.5">
