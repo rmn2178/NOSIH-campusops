@@ -1,11 +1,13 @@
 """Officer appointment and faculty booking gate.
 
-Two promises are checked here:
+Three promises are checked here:
 
 1. A request owns an officer from the moment it is raised, whatever channel
    raised it, and the officer changes when the conditions change.
 2. Faculty can book a room through the same read models and RPCs the complaint
    portal uses, and the server refuses the bookings it must refuse.
+3. Students have no booking system at all: every booking RPC refuses a student
+   session, while every other staff role may book.
 
 Every mutation is rolled back at the end.
 """
@@ -14,8 +16,10 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+
+import psycopg
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from _db import connect  # noqa: E402
@@ -50,6 +54,25 @@ def as_postgres(cur) -> None:
 def one(cur, sql: str, params: dict | None = None):
     cur.execute(sql, params or {})
     return cur.fetchone()
+
+
+def refuses(cur, sql: str, params: dict | None = None, tag: str = "sp") -> str:
+    """Run a statement the caller must not be allowed to run.
+
+    The statement is expected to raise. A savepoint keeps the surrounding
+    transaction alive, so the rest of the gate still sees the rows it wrote.
+    Returns the SQLSTATE of the refusal, or an empty string when the statement
+    was allowed through.
+    """
+    cur.execute(f"savepoint {tag}")
+    try:
+        cur.execute(sql, params or {})
+    except psycopg.Error as exc:
+        state = str(getattr(exc, "sqlstate", "") or "")
+        cur.execute(f"rollback to savepoint {tag}")
+        return state
+    cur.execute(f"rollback to savepoint {tag}")
+    return ""
 
 
 def teaching_day() -> date:
@@ -318,6 +341,88 @@ def main() -> None:
             "select count(*) from public.audit_logs where action = 'CREATE_BOOKING' and outcome = 'ALLOWED'",
         )[0]
         check("B12 the booking is on the audit chain", audits >= 1, audits)
+
+        # ------------------------------------------------------------------
+        # Students have no booking system
+        # ------------------------------------------------------------------
+        as_postgres(cur)
+        before = one(cur, "select count(*) from public.room_bookings")[0]
+        as_user(cur, STUDENT_UUID)
+
+        state = refuses(cur, "select public.rpc_bookable_rooms(%(day)s::date)", {"day": day.isoformat()})
+        check("S1 a student cannot read the campus availability grid", state == "42501", state or "ALLOWED")
+
+        state = refuses(cur, "select public.rpc_my_bookings(now() - interval '1 hour', 50)")
+        check("S2 a student cannot list their own bookings", state == "42501", state or "ALLOWED")
+
+        state = refuses(cur, "select public.rpc_list_bookings(now(), 50)")
+        check("S3 a student cannot read the campus booking register", state == "42501", state or "ALLOWED")
+
+        state = refuses(
+            cur,
+            "select public.rpc_get_room_occupancy(%(room)s, now(), now() + interval '1 day')",
+            {"room": free_room["room_code"]},
+        )
+        check("S4 a student cannot read a room occupancy panel", state == "42501", state or "ALLOWED")
+
+        student_cancel = one(
+            cur,
+            "select public.rpc_cancel_booking(%(id)s, %(email)s)",
+            {"id": created.get("booking_id"), "email": "aids1a01@nosih.edu.in"},
+        )[0]
+        check("S5 a student cannot cancel a booking", student_cancel.get("error") == "FORBIDDEN",
+              student_cancel.get("error"))
+
+        as_postgres(cur)
+        after = one(cur, "select count(*) from public.room_bookings")[0]
+        check("S6 no student attempt wrote a booking row", after == before, (before, after))
+
+        # ------------------------------------------------------------------
+        # Everyone who is not a student may book
+        # ------------------------------------------------------------------
+        tech = one(
+            cur,
+            "select auth_user_id, email from public.users "
+            " where role = 'MAINTENANCE' and auth_user_id is not null and is_active "
+            " order by id limit 1",
+        )
+        as_user(cur, tech[0])
+        tech_rooms = one(cur, "select public.rpc_bookable_rooms(%(day)s::date)", {"day": day.isoformat()})[0]
+        check("S7 a technician reads the same availability grid", len(tech_rooms) > 50, len(tech_rooms))
+
+        tech_free = None
+        for room in tech_rooms:
+            if room["room_code"] == free_room["room_code"]:
+                continue
+            for slot in room["slots"]:
+                if slot["state"] == "FREE":
+                    tech_free = (room, slot)
+                    break
+            if tech_free:
+                break
+
+        tech_booking = one(
+            cur,
+            "select public.rpc_create_booking(%(room)s, %(start)s, %(end)s, %(purpose)s, %(class)s, %(email)s, %(key)s)",
+            {
+                "room": tech_free[0]["room_code"],
+                "start": tech_free[1]["starts_at"],
+                "end": tech_free[1]["ends_at"],
+                "purpose": "Technician briefing",
+                "class": None,
+                "email": tech[1],
+                "key": "verify-officer-booking-tech",
+            },
+        )[0]
+        check("S8 a technician may book a room", tech_booking.get("success") is True, tech_booking.get("error"))
+
+        tech_cancel = one(
+            cur,
+            "select public.rpc_cancel_booking(%(id)s, %(email)s)",
+            {"id": tech_booking.get("booking_id"), "email": tech[1]},
+        )[0]
+        check("S9 the technician cancels their own booking", tech_cancel.get("success") is True,
+              tech_cancel.get("error"))
 
         conn.rollback()
 

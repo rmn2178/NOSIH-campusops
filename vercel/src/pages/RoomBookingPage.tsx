@@ -75,7 +75,7 @@ function messageFor(result: BookingOutcome): string {
     case 'INVALID_WINDOW':
       return result.reason === 'MAX_12_HOURS' ? 'Bookings are limited to 12 hours.' : 'The booking window is invalid.';
     case 'FORBIDDEN':
-      return 'Your role cannot create bookings.';
+      return 'Room booking is for faculty and staff, so your role cannot create bookings.';
     default:
       return result.error ? result.error.replaceAll('_', ' ').toLowerCase() : 'The booking could not be created.';
   }
@@ -423,7 +423,8 @@ export function RoomBookingPage() {
 
               {!canBook && (
                 <p className="mt-4 rounded-xl border border-stitch bg-silk px-3 py-2.5 text-[11px] text-stone">
-                  Your role can read the room calendar, but booking a room is for faculty and staff.
+                  Room booking is a faculty and staff service. Your role reads the campus timetable but cannot
+                  reserve a room.
                 </p>
               )}
 

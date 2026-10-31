@@ -21,7 +21,7 @@ packages/
   supabase-client/          shared typed client: auth, RPC wrappers, realtime
 services/nosih-api/         Python seed generator, migrations runner, verification scripts
 supabase/
-  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0050)
+  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0052)
   functions/                optional Edge Functions (email webhook, SLA tick) — not required
 docs/screenshots/           reference captures
 README.md  Makefile  docker-compose.yml
@@ -150,7 +150,7 @@ Each room owns 22 assets; every space is addressable by a canonical code (`C4-03
 `rpc_get_staff_profile`, `rpc_claim_resource_lock`, `rpc_release_resource_lock`.
 **Scheduling** — `rpc_get_room_relocation_candidates`, `rpc_execute_room_relocation`,
 `rpc_create_booking`, `rpc_cancel_booking`, `rpc_list_bookings`, `rpc_get_room_occupancy`,
-`nosih_booking_conflicts`, `nosih_booking_alternatives`, `rpc_set_class_strength`.
+`nosih_booking_conflicts`, `nosih_booking_alternatives`, `rpc_bookable_rooms`, `rpc_my_bookings`, `nosih_booking_role_allowed`, `rpc_set_class_strength`.
 **Stock & money** — `rpc_parts_preflight`, `rpc_reserve_parts_for_work_order`, `rpc_purchase_preflight`,
 `rpc_decide_purchase_request`, `rpc_receive_purchase_request_stock`, `rpc_approve_repair`,
 `rpc_complete_work_order`, `rpc_update_complaint_status`.
@@ -175,7 +175,9 @@ Student/Faculty submit and read; Lab Staff are operational readers; Maintenance 
 parts; Department Manager reads their department's work orders, SLA clocks and purchase requests and
 approves up to ₹10,000 only for their own department; Incident Manager dispatches, relocates and
 moderates; Facilities Administrator dispatches, books, approves up to ₹10,000; Procurement Approver
-approves up to ₹100,000 and receives stock; System Administrator owns break-glass.
+approves up to ₹100,000 and receives stock; System Administrator owns break-glass. Students report
+faults, follow a ticket and read the campus feed; they have no booking system at all — no `/bookings`
+route, no nav entry, and no booking RPC accepts a student session.
 
 Department scope is derived from `department_spaces` (the spaces a department actually teaches in),
 not from a hand-maintained list. Facilities, incident, procurement and system roles stay campus-wide.
@@ -321,8 +323,8 @@ the procurement funnel.
 | `verify_asset_history.py` | 50 priced repairs, parts/labour/total reconciliation, 24-hour downtime cap (a backdated 90-day ticket bills 1,440 min), open work order, empty record, RBAC and trigger pricing |
 | `verify_comment_ai.py` | Groq endpoint/model, model verdicts for a fair complaint and an insult, rewrite returned on the real comment RPC, held row kept out of the feed |
 | `verify_demo_curation.py` | demo gate: exactly three live tickets, C1-02 carries only the front-row fan and light, one lab bench, one bill bot rerouted to BOT-04, the rest repaired with history, feed defaults to active |
-| `verify_officer_booking.py` | every request gets an area officer (gates, area, audit), leave hands the job over, faculty booking accepted, double booking and class and capacity refused, students refused, retries idempotent |
-| `verify_portal_booking.py` | the browser contract over HTTP: faculty sign-in, room calendar, own bookings, a real booking and its release, officers in the feed |
+| `verify_officer_booking.py` | every request gets an area officer (gates, area, audit), leave hands the job over, faculty booking accepted, double booking and class and capacity refused, retries idempotent, every booking RPC refuses a student, a technician may book |
+| `verify_portal_booking.py` | the browser contract over HTTP: faculty sign-in, room calendar, own bookings, a real booking and its release, officers in the feed, a student sign-in refused by every booking endpoint |
 | `verify_ai_keys.py` | multi-key pool, Groq routing, key material and the raw HTTP helper denied to browser roles, successive model calls succeed while rotating keys |
 | `verify_rbac_matrix.py` | 8 role sign-ins, department-scoped work orders/SLA/PRs, audit and directory lockdown, forged-email denial, cross-department approval, self-approval |
 | `verify_chat.py` | question reaches the model, grounded codes, multi-turn, ownership guard |
@@ -374,6 +376,18 @@ enable it. Without the secret the job passes with a notice instead of failing.
   built from the live timetable, the exam calendar and the booking register; `rpc_my_bookings()`
   returns the signed-in user's own bookings. The server re-checks class, exam, booking, capacity and
   window rules, and a request key makes a retried booking land on the same record.
+- Students have no booking system (migration `0051`). The nav entry, the feed shortcut and the
+  `/bookings` route are closed to a student, and the server agrees: `rpc_bookable_rooms`,
+  `rpc_my_bookings`, `rpc_list_bookings` and `rpc_get_room_occupancy` refuse a student session with
+  `42501`, while `rpc_create_booking` and `rpc_cancel_booking` answer `FORBIDDEN`. The write gate
+  is one rule for everybody else — `nosih_booking_role_allowed` allows any active role that is not a
+  student, so a technician or a lab assistant may book a room and cancel their own booking, while
+  cancelling somebody else's still needs the owner, the owner's department manager or an
+  administrator.
+- The exam schedule joins row level security in migration `0052` — it was the last table without it,
+  so a student could read the whole campus exam grid straight from the table. The grid is a
+  scheduling table, so it follows the booking rule: staff read it, students do not. The booking
+  read models are security definer and still see every row.
 - Document numbers (tickets, work orders, incidents) draw from one monotonic sequence with unique
   indexes, so the campus pulse cron can never collide with an interactive session — before migration
   `0034` a concurrent tick and submit could mint the same work-order number and price a repair at zero.

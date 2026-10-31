@@ -3,12 +3,19 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 
-from sqlalchemy import text
+from sqlalchemy import create_engine, text
 
-sys.path.insert(0, ".")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.database import engine  # noqa: E402
+from _db import enable_utf8_stdout, sqlalchemy_url  # noqa: E402
+
+enable_utf8_stdout()
+
+# The direct Supabase host has no route from some networks, so the engine is
+# built on whichever address answers right now.
+engine = create_engine(sqlalchemy_url())
 
 
 def main() -> None:

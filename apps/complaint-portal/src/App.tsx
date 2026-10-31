@@ -32,6 +32,23 @@ function ProtectedApp() {
   return token ? <PortalLayout /> : <Navigate to="/login" replace />;
 }
 
+/** Room booking is a faculty and staff surface. A student has no booking
+ * system at all: the nav entry and the feed shortcut stay hidden, the server
+ * refuses every booking call, and this route sends a student back to the feed
+ * instead of showing a calendar they cannot use. */
+function BookingRoute() {
+  const user = useAuthStore((state) => state.user);
+
+  if (!user) return pageFallback;
+  if (user.role === 'STUDENT') return <Navigate to="/feed" replace />;
+
+  return (
+    <Suspense fallback={pageFallback}>
+      <RoomBookingPage />
+    </Suspense>
+  );
+}
+
 export default function App() {
   const initialize = useAuthStore((state) => state.initialize);
 
@@ -46,7 +63,7 @@ export default function App() {
         <Route path="/feed" element={<CampusFeedPage />} />
         <Route path="/complaints/new" element={<Suspense fallback={pageFallback}><NewComplaintPage /></Suspense>} />
         <Route path="/complaints/:complaintId" element={<Suspense fallback={pageFallback}><ComplaintDetailPage /></Suspense>} />
-        <Route path="/bookings" element={<Suspense fallback={pageFallback}><RoomBookingPage /></Suspense>} />
+        <Route path="/bookings" element={<BookingRoute />} />
       </Route>
       <Route path="*" element={<Navigate to="/feed" replace />} />
     </Routes>

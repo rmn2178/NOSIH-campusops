@@ -84,7 +84,9 @@ npx vercel --prod     # production
 - Faculty and staff also get **Book a room** (`/bookings`): live availability
   for every healthy room, a six-period grid that respects the timetable, exams
   and other bookings, alternative rooms when a window is taken, and their own
-  bookings with cancel. Students never see the entry.
+  bookings with cancel. Students never see the entry: the nav link, the feed
+  shortcut and the `/bookings` route are all closed to a student, and the
+  server refuses a student session on every booking RPC.
 - Check the feed, open a ticket's comments page, and file one test report.
 - After changing this folder, redeploy so the production domain picks up the
   new build.

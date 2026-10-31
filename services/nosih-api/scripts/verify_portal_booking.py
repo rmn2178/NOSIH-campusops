@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from app.config import settings  # noqa: E402
 
 FACULTY_EMAIL = "fac001@nosih.edu.in"
+STUDENT_EMAIL = "aids1a01@nosih.edu.in"
 DEMO_PASSWORD = "Nosih@2026"
 IST = timezone(timedelta(hours=5, minutes=30))
 
@@ -93,6 +94,9 @@ def main() -> None:
     booked_rooms = [room for room in rooms if any(slot["state"] == "BOOKING" for slot in room["slots"])]
     check("H4 the calendar already carries campus bookings", len(booked_rooms) > 0, len(booked_rooms))
 
+    exam_rooms = [room for room in rooms if any(slot["state"] == "EXAM" for slot in room["slots"])]
+    check("H4b the calendar carries the exam schedule", len(exam_rooms) > 0, len(exam_rooms))
+
     status, mine = call("/rest/v1/rpc/rpc_my_bookings", token=token,
                         payload={"p_from": datetime.now(timezone.utc).isoformat(), "p_limit": 50})
     check("H5 the faculty member sees their own bookings",
@@ -125,6 +129,57 @@ def main() -> None:
         check("H9 the owner can release the room again",
               status == 200 and isinstance(cancelled, dict) and cancelled.get("status") == "CANCELLED",
               cancelled)
+
+    # ------------------------------------------------------------------
+    # A student has no booking system
+    # ------------------------------------------------------------------
+    status, student_session = call(
+        "/auth/v1/token?grant_type=password",
+        payload={"email": STUDENT_EMAIL, "password": DEMO_PASSWORD},
+    )
+    if status != 200 or not isinstance(student_session, dict):
+        raise SystemExit(f"student sign-in failed: {status} {student_session}")
+    student_token = student_session["access_token"]
+    print(f"signed in: {student_session['user']['email']}")
+
+    status, student_profile = call("/rest/v1/rpc/rpc_my_profile", token=student_token, payload={})
+    check("H10 the student profile resolves",
+          status == 200 and isinstance(student_profile, dict) and student_profile.get("role") == "STUDENT",
+          student_profile.get("role") if isinstance(student_profile, dict) else student_profile)
+
+    status, _ = call("/rest/v1/rpc/rpc_bookable_rooms", token=student_token, payload={"p_date": day})
+    check("H11 the room calendar is closed to a student", status == 403, status)
+
+    status, _ = call("/rest/v1/rpc/rpc_my_bookings", token=student_token,
+                      payload={"p_from": datetime.now(timezone.utc).isoformat(), "p_limit": 50})
+    check("H12 the booking list is closed to a student", status == 403, status)
+
+    status, _ = call("/rest/v1/rpc/rpc_list_bookings", token=student_token,
+                      payload={"p_from": datetime.now(timezone.utc).isoformat(), "p_limit": 50})
+    check("H13 the campus booking register is closed to a student", status == 403, status)
+
+    status, student_booking = call("/rest/v1/rpc/rpc_create_booking", token=student_token, payload={
+        "p_space_code": free[0]["room_code"],
+        "p_starts_at": free[1]["starts_at"],
+        "p_ends_at": free[1]["ends_at"],
+        "p_purpose": "Student attempt",
+        "p_class_code": None,
+        "p_actor_email": STUDENT_EMAIL,
+        "p_request_key": f"portal-contract-student-{int(datetime.now(timezone.utc).timestamp())}",
+    })
+    check("H14 a student cannot write a booking",
+          status == 200 and isinstance(student_booking, dict) and student_booking.get("error") == "FORBIDDEN",
+          student_booking if not isinstance(student_booking, dict) else student_booking.get("error"))
+
+    status, staff_exams = call("/rest/v1/exams?select=space_code,exam_date", token=token)
+    check("H15 staff still read the exam schedule",
+          status == 200 and isinstance(staff_exams, list) and len(staff_exams) > 0,
+          len(staff_exams) if isinstance(staff_exams, list) else staff_exams)
+
+    status, student_exams = call("/rest/v1/exams?select=space_code,exam_date", token=student_token)
+    check("H16 a student cannot read the exam schedule from the table",
+          status == 200 and isinstance(student_exams, list) and len(student_exams) == 0,
+          len(student_exams) if isinstance(student_exams, list) else student_exams)
 
     print("\nRESULT:", "ALL PASS" if not failures else f"{len(failures)} FAILURE(S)")
     sys.exit(0 if not failures else 1)
