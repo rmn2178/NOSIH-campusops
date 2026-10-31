@@ -96,6 +96,10 @@ jobs:
         if: env.DATABASE_URL != ''
         working-directory: services/nosih-api
         run: python scripts/verify_sla_integrity.py
+      - name: Verify that every campus identity can sign in
+        if: env.DATABASE_URL != ''
+        working-directory: services/nosih-api
+        run: python scripts/verify_login_matrix.py
       - name: Verify the portal booking contract over HTTP
         if: env.DATABASE_URL != ''
         working-directory: services/nosih-api

@@ -962,7 +962,18 @@ export const api = {
     login: async (email: string, password: string): Promise<LoginResponse> => {
       cachedProfile = null;
       const { data, error } = await signIn(email, password);
-      if (error) throw new ApiError(error.message, 401, null);
+      if (error) {
+        const message = error.message.toLowerCase();
+        throw new ApiError(
+          message.includes('invalid login')
+            ? 'That email and password do not match an account.'
+            : message.includes('rate limit')
+              ? 'The campus mail service is busy right now. Please try again.'
+              : 'Unable to sign in right now. Please try again.',
+          401,
+          null,
+        );
+      }
       localStorage.setItem(TOKEN_STORAGE_KEY, data.session?.access_token ?? '');
       const user = await api.auth.me();
       return { access_token: data.session?.access_token ?? '', token_type: 'bearer', user };

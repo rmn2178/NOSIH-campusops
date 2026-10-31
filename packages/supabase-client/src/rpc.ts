@@ -1,8 +1,13 @@
 import { supabase, unwrap } from './client';
 
 export const rpc = {
-  searchDirectory: (query: string, limit = 8) =>
-    supabase.rpc('rpc_search_directory', { p_query: query, p_limit: limit }).then(unwrap),
+  searchDirectory: (query: string, limit = 8, department?: string | null, academicRole?: string | null) =>
+    supabase.rpc('rpc_search_directory', {
+      p_query: query,
+      p_limit: limit,
+      p_department: department ?? null,
+      p_academic_role: academicRole ?? null,
+    }).then(unwrap),
 
   inspector: (space: string) =>
     supabase.rpc('rpc_get_space_twin_inspector', { p_space_input: space }).then(unwrap),

@@ -13,7 +13,6 @@ import {
   invokeSupplement,
   rpc,
   signIn,
-  signUp,
   supabase,
 } from '@nosih/supabase-client';
 
@@ -119,8 +118,6 @@ export interface SessionProfile {
 
 export interface LoginRequest {
   email: string;
-  department: Department;
-  academic_role: AcademicRole;
   password: string;
 }
 
@@ -292,15 +289,6 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
-
-const DEPARTMENT_CODES: Record<Department, string> = {
-  'AI&DS': 'AIDS',
-  AIML: 'AIML',
-  CSE: 'CSE',
-  ECE: 'ECE',
-  MECH: 'MECH',
-  'Cyber Security': 'CYBER',
-};
 
 const DEPARTMENT_LABELS: Record<string, Department> = {
   AIDS: 'AI&DS',
@@ -513,31 +501,44 @@ function mapBookingOutcome(raw: Record<string, unknown>): BookingOutcome {
   };
 }
 
+/**
+ * The message each login outcome deserves.
+ *
+ * The portal never opens an account from the browser: every member of the
+ * campus register already holds a seat, and a sign-up call would send a
+ * confirmation email that the campus mail quota cannot afford. So a failed
+ * sign-in is explained, never raw.
+ */
+async function loginFailure(email: string, rawMessage: string): Promise<string> {
+  const message = rawMessage.toLowerCase();
+  if (message.includes('rate limit')) {
+    return 'The campus mail service is busy, so the portal cannot open an account right now. Sign in with a ready account, or ask the campus office to open a seat.';
+  }
+  if (message.includes('email not confirmed')) {
+    return 'This account still needs email confirmation, and @nosih.edu.in mail does not exist. Ask the campus office to open a seat.';
+  }
+  if (!message.includes('invalid login')) {
+    return 'Unable to sign in right now. Please try again.';
+  }
+  try {
+    const entries = (await rpc.searchDirectory(email, 5)) as Array<{ email?: string }>;
+    const member = entries.some((entry) => (entry.email ?? '').toLowerCase() === email);
+    if (!member) {
+      return 'No campus account is registered for that email. Pick your name from the directory, or use one of the demo logins.';
+    }
+  } catch {
+    return 'That email and password do not match an account.';
+  }
+  return 'That password does not match this account. Demo accounts use Nosih@2026.';
+}
+
 export const api = {
   login: async (body: LoginRequest): Promise<LoginResponse> => {
     const email = body.email.trim().toLowerCase();
-    const role = body.academic_role === 'FACULTY_STAFF' ? 'FACULTY' : 'STUDENT';
-    const year = body.academic_role.startsWith('YEAR_')
-      ? Number(body.academic_role.slice(-1))
-      : null;
 
-    let result = await signIn(email, body.password);
+    const result = await signIn(email, body.password);
     if (result.error) {
-      const message = result.error.message.toLowerCase();
-      if (!message.includes('invalid login')) {
-        throw new ApiError(result.error.message, 400);
-      }
-      const created = await signUp(email, body.password, {
-        full_name: email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        role,
-        department_code: DEPARTMENT_CODES[body.department],
-        year_number: year,
-      });
-      if (created.error) throw new ApiError(created.error.message, 400);
-      if (!created.data.session) {
-        throw new ApiError('Account created. Confirm your email, then sign in again.', 401);
-      }
-      result = { data: created.data, error: null } as unknown as typeof result;
+      throw new ApiError(await loginFailure(email, result.error.message), 401);
     }
 
     const profile = mapProfile(await loadProfile());
@@ -549,8 +550,13 @@ export const api = {
     };
   },
 
-  searchDirectory: async (query: string, _signal?: AbortSignal): Promise<DirectoryEntry[]> => {
-    const rows = (await rpc.searchDirectory(query, 8)) as Array<Record<string, unknown>>;
+  searchDirectory: async (
+    query: string,
+    _signal?: AbortSignal,
+    department?: Department | null,
+    academicRole?: AcademicRole | null,
+  ): Promise<DirectoryEntry[]> => {
+    const rows = (await rpc.searchDirectory(query, 8, department ?? null, academicRole ?? null)) as Array<Record<string, unknown>>;
     return rows.map((row) => ({
       email: String(row.email),
       full_name: String(row.full_name),

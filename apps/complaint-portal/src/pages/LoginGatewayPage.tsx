@@ -37,7 +37,7 @@ export function LoginGatewayPage() {
     const timer = setTimeout(async () => {
       setSearching(true);
       try {
-        const results = await api.searchDirectory(query, controller.signal);
+        const results = await api.searchDirectory(query, controller.signal, department, academicRole);
         setSuggestions(results);
       } catch (requestError) {
         if (!controller.signal.aborted) setSuggestions([]);
@@ -50,7 +50,7 @@ export function LoginGatewayPage() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [email, directoryOpen]);
+  }, [email, directoryOpen, department, academicRole]);
 
   useEffect(() => () => {
     if (blurTimer.current) clearTimeout(blurTimer.current);
@@ -86,8 +86,6 @@ export function LoginGatewayPage() {
       const session = await api.login({
         email: normalizedEmail,
         password,
-        department,
-        academic_role: academicRole,
       });
       setSession(session);
       navigate('/feed', { replace: true });

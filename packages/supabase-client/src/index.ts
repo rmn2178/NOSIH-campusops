@@ -1,6 +1,6 @@
 export { supabase, unwrap } from './client';
 export {
-  signIn, signUp, signOut, currentSession, currentProfile, accessToken, authUserId,
+  signIn, signOut, currentSession, currentProfile, accessToken, authUserId,
   type AppProfile,
 } from './auth';
 export { rpc, invokeIntake, invokeComment, invokeSupplement } from './rpc';

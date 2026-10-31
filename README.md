@@ -21,7 +21,7 @@ packages/
   supabase-client/          shared typed client: auth, RPC wrappers, realtime
 services/nosih-api/         Python seed generator, migrations runner, verification scripts
 supabase/
-  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0057)
+  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0058)
   functions/                optional Edge Functions (email webhook, SLA tick) — not required
 docs/screenshots/           reference captures
 README.md  Makefile  docker-compose.yml
@@ -85,6 +85,7 @@ wrappers for every RPC used by the portals, including `aiChat`, `chatIntake`, `a
 | `scripts/realistic_timetable.py` | idempotent 2,700-slot rebuild (subjects, teachers, labs) |
 | `scripts/unique_student_identities.py` | unique student codes, names, class and department |
 | `scripts/seed_role_logins.py` | Supabase auth seats for department managers plus a demo faculty/lab-staff set (`--all` for every staff profile) |
+| `scripts/seed_all_seats.py` | a confirmed auth seat for every active profile, so signing in never asks the mail service for anything |
 | `scripts/f10_curate_demo.sql` | curated live state: three faults (classroom, lab bench, bill bot), the rest repaired |
 | `scripts/f11_demo_bookings.sql` | realistic faculty bookings for the coming week, exams moved to weekdays, area officers appointed |
 | `scripts/verify_*.py` | runnable PASS checks (see §9) |
@@ -144,7 +145,8 @@ Each room owns 22 assets; every space is addressable by a canonical code (`C4-03
 **Intake** — `rpc_submit_complaint`, `rpc_supplement_complaint`, `rpc_confirm_affected`,
 `rpc_list_complaints`, `rpc_get_complaint`, `rpc_post_comment`, `nosih_complaint_json`.
 **Read models** — `rpc_twin_overview`, `rpc_get_space_twin_inspector`, `rpc_my_profile`,
-`rpc_search_directory`, `rpc_set_clock`, `rpc_set_clock_mode`.
+`rpc_search_directory` (the campus register, narrowed by department and academic role),
+`rpc_set_clock`, `rpc_set_clock_mode`.
 **Dispatch** — `rpc_rank_staff_for_work_order` (five gates, transparent score),
 `rpc_assign_or_rebalance_staff`, `rpc_trigger_staff_shift_change`, `rpc_workforce_summary`,
 `rpc_get_staff_profile`, `rpc_claim_resource_lock`, `rpc_release_resource_lock`.
@@ -367,6 +369,7 @@ the procurement funnel.
 | `verify_comment_ai.py` | Groq endpoint/model, model verdicts for a fair complaint and an insult, rewrite returned on the real comment RPC, held row kept out of the feed |
 | `verify_demo_curation.py` | demo gate: exactly three live tickets, C1-02 carries only the front-row fan and light, one lab bench, one bill bot rerouted to BOT-04, the rest repaired with history, feed defaults to active |
 | `verify_officer_booking.py` | every request gets an area officer (gates, area, audit), leave hands the job over, faculty booking accepted, double booking and class and capacity refused, retries idempotent, every booking RPC refuses a student, a technician may book |
+| `verify_login_matrix.py` | every active profile holds a seat, every role signs in over the token endpoint with the demo password, a wrong password and an unknown email are refused, a refused sign-in creates no account and sends no mail, and no portal source calls the auth sign-up endpoint |
 | `verify_sla_system.py` | the SLA matrix and its category overrides, the operating calendar (weekend, holiday, after hours, 24x7), a request born with the right deadlines, the tick, the half-time milestone, the warning, the breach and the hand-over, the response clock, pause and resume, the board and the compliance report, a student refused, a department manager kept inside their own department |
 | `verify_portal_booking.py` | the browser contract over HTTP: faculty sign-in, room calendar, own bookings, a real booking and its release, officers in the feed, a student sign-in refused by every booking endpoint |
 | `verify_ai_keys.py` | multi-key pool, Groq routing, key material and the raw HTTP helper denied to browser roles, successive model calls succeed while rotating keys |
@@ -436,6 +439,9 @@ enable it. Without the secret the job passes with a notice instead of failing.
   already follows: a department manager reads and pauses only the clocks of their own department,
   because the board, the compliance report and the pause control are `SECURITY DEFINER` functions and
   would otherwise walk past the row level security on the tables.
+- Migration `0058` gives the campus directory the two filters the login page shows: department and
+  academic role. It also fixes the row limit, which never trimmed the list because the limit sat
+  outside the aggregate, so a search could return the whole register.
 - The exam schedule joins row level security in migration `0052` — it was the last table without it,
   so a student could read the whole campus exam grid straight from the table. The grid is a
   scheduling table, so it follows the booking rule: staff read it, students do not. The booking
@@ -477,6 +483,9 @@ enable it. Without the secret the job passes with a notice instead of failing.
   approve purchase requests, not repair sign-off.
 - Notification delivery is simulated (`SENT` rows) with no retry worker.
 - `services/nosih-api/app/engines` duplicates rules that now live in SQL; keep as reference only.
+- The Supabase project still has "Confirm email" switched on. Nothing in the platform asks for a
+  confirmation mail any more - every profile holds a confirmed seat - so the setting only matters if
+  you add another client that signs people up.
 
 ---
 
@@ -492,25 +501,35 @@ Portal env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. Server secrets
 Every seeded account shares the demo password printed on the login screen (`Nosih@2026`). Rotate it
 and disable the demo accounts before exposing a public deployment.
 
+**Signing in never sends mail.** The portal used to open a missing account with the browser sign-up
+call, which sent a confirmation email: the campus mail quota could not afford it, the mail could
+never arrive at `@nosih.edu.in`, and the login could only fail with "email rate limit exceeded".
+Every profile on the campus register now holds a confirmed seat (`seed_all_seats.py`, created with
+`email_confirm` and no mail), and the portal asks the auth service for a password only. A failed
+sign-in is explained in words - a wrong password, an email that is not on the register - and the
+session carries the whole profile every time: role, department, year, class, section, home room and
+staff code.
+
 Run `services/nosih-api/scripts/list_logins.py` for the live inventory (role, email, name and
-whether an auth seat exists). The seeded seats that are ready to sign in:
+whether an auth seat exists). The accounts that are ready to sign in:
 
 | Role | Sign-in | Note |
 |---|---|---|
 | Student | `aids1a01@nosih.edu.in` | no booking system, no `/bookings` route |
 | Student | `aids2a01@nosih.edu.in`, `mech1a01@nosih.edu.in`, … | roll 01 of every class, 90 students seated |
+| Student | any of the 5,175 on the register | every active profile holds a seat |
 | Faculty | `fac001@nosih.edu.in` | room booking, class strength, own bookings |
-| Faculty | `fac016@`, `fac031@`, `fac046@`, `fac061@`, `fac076@` | one per department, 6 seated of 120 |
+| Faculty | `fac016@`, `fac031@`, `fac046@`, `fac061@`, `fac076@` | one per department, all 120 seated |
 | Lab staff | `labstf001@nosih.edu.in` | operational reader |
 | Department manager | `hod.cse@nosih.edu.in` | `hod.aids@`, `hod.aiml@`, `hod.cyber@`, `hod.ece@`, `hod.mech@` |
 | Facilities admin | `facilities@nosih.edu.in` | dispatch, bookings, ₹10,000 approvals |
 | Incident manager | `incident@nosih.edu.in` | dispatch, relocation, moderation |
 | Procurement approver | `procurement@nosih.edu.in` | ₹100,000 approvals, stock receipt |
 | System admin | `sysadmin@nosih.edu.in` | break-glass |
-| Maintenance | `maint01@nosih.edu.in` … `maint12@nosih.edu.in` | technicians, 12 seated of 30 |
+| Maintenance | `maint01@nosih.edu.in` … `maint30@nosih.edu.in` | technicians, all 30 seated |
 
-`seed_role_logins.py --all` seats every remaining non-student profile; `seed_student_auth.py` seats
-the roll-01 student of every class.
+`seed_all_seats.py` seats every profile that is missing one; `seed_role_logins.py --all` seats the
+staff set and `seed_student_auth.py` seats the roll-01 student of every class.
 
 `vercel/` is a self-contained copy of the complaint portal for upload to Vercel. It has its own
 `package.json`, lockfile, env template and `vercel.json`, runs on port 5180, and is built by CI;
