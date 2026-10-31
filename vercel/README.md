@@ -78,7 +78,12 @@ npx vercel --prod     # production
 ## After deploy
 
 - Sign in once on the Vercel domain; Supabase sessions are per-origin.
+- The feed opens on **Active reports**: C1-02 (front-row fan and light), BOT-03
+  (bill bot rerouted to BOT-04) and LAB-PHYS-04 (bench 14). Resolved history is
+  one status filter away.
 - Check the feed, open a ticket's comments page, and file one test report.
+- After changing this folder, redeploy so the production domain picks up the
+  new build.
 - Supabase browser access uses RLS and the publishable key; no CORS change is
   normally needed because the API is called directly over HTTPS.
 

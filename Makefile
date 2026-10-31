@@ -9,7 +9,7 @@ PIP := .venv/$(VENV_BIN)/pip
 ALEMBIC := .venv/$(VENV_BIN)/alembic
 UVICORN := .venv/$(VENV_BIN)/uvicorn
 
-.PHONY: install seed migrate verify verify-live dev-api dev-complaint dev-admin test build
+.PHONY: install seed migrate verify verify-live verify-demo demo-state dev-api dev-complaint dev-admin test build
 
 install:
 	test -x services/nosih-api/$(PYTHON) || python -m venv services/nosih-api/.venv
@@ -27,6 +27,12 @@ verify:
 
 verify-live:
 	cd services/nosih-api && $(PYTHON) scripts/verify_all.py
+
+verify-demo:
+	cd services/nosih-api && $(PYTHON) scripts/verify_demo_curation.py
+
+demo-state:
+	cd services/nosih-api && $(PYTHON) scripts/apply_sql_file.py scripts/f10_curate_demo.sql
 
 test:
 	cd services/nosih-api && $(PYTHON) -m pytest -q

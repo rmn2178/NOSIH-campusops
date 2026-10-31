@@ -1,4 +1,4 @@
--- Demo conversation on the five live tickets. Idempotent: a comment is only
+-- Demo conversation on the live tickets. Idempotent: a comment is only
 -- inserted when the same complaint does not already carry that body.
 with seed(complaint_id, body, label, badge, created_at) as (
   values

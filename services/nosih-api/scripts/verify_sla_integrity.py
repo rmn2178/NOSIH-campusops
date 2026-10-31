@@ -6,12 +6,8 @@ import json
 import sys
 from pathlib import Path
 
-from sqlalchemy import text
-
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-from app.database import engine  # noqa: E402
-from _db import enable_utf8_stdout  # noqa: E402
+from _db import connect, enable_utf8_stdout  # noqa: E402
 
 enable_utf8_stdout()
 
@@ -29,11 +25,16 @@ def check(name: str, condition: bool, detail: object = "") -> None:
 
 
 def main() -> None:
-    with engine.connect() as conn:
-        trans = conn.begin()
+    with connect() as conn:
+        cur = conn.cursor()
 
         def scalar(sql: str, **params):
-            return conn.execute(text(sql), params).scalar_one()
+            cur.execute(sql, params)
+            return cur.fetchone()[0]
+
+        def row(sql: str, **params):
+            cur.execute(sql, params)
+            return cur.fetchone()
 
         space = scalar(
             "select r.code from public.rooms r where r.visual_state = 'HEALTHY' "
@@ -42,7 +43,7 @@ def main() -> None:
             " order by r.code limit 1"
         )
         submitted = scalar(
-            "select public.rpc_submit_complaint(cast(:payload as jsonb))",
+            "select public.rpc_submit_complaint(cast(%(payload)s as jsonb))",
             payload=json.dumps({
                 "email": "facilities@nosih.edu.in",
                 "is_anonymous": False,
@@ -52,108 +53,101 @@ def main() -> None:
             }),
         )
         complaint_id = submitted["complaint"]["id"]
-        wo = conn.execute(
-            text("select id, wo_number from public.work_orders where complaint_id = :id order by id desc limit 1"),
-            {"id": complaint_id},
-        ).one()
-        clock = conn.execute(
-            text("select id, elapsed_active_mins from public.sla_clocks "
-                 "where target_type = 'WORK_ORDER' and target_id = :id order by id desc limit 1"),
-            {"id": wo.id},
-        ).one()
-        print(f"ticket {submitted['complaint']['ticket_number']} · {wo.wo_number} · clock {clock.id}")
+        wo = row("select id, wo_number from public.work_orders where complaint_id = %(id)s order by id desc limit 1",
+                 id=complaint_id)
+        clock = row("select id, elapsed_active_mins from public.sla_clocks "
+                    "where target_type = 'WORK_ORDER' and target_id = %(id)s order by id desc limit 1",
+                    id=wo[0])
+        print(f"ticket {submitted['complaint']['ticket_number']} · {wo[1]} · clock {clock[0]}")
 
-        conn.execute(text("update public.sla_clocks set last_tick_at = now() - interval '10 minutes' where id = :id"), {"id": clock.id})
+        cur.execute("update public.sla_clocks set last_tick_at = now() - interval '10 minutes' where id = %(id)s",
+                    {"id": clock[0]})
         scalar("select public.rpc_tick_sla_clocks()")
-        after_tick = scalar("select elapsed_active_mins from public.sla_clocks where id = :id", id=clock.id)
-        check("clock accrues while open", after_tick - clock.elapsed_active_mins >= 9, (clock.elapsed_active_mins, after_tick))
+        after_tick = scalar("select elapsed_active_mins from public.sla_clocks where id = %(id)s", id=clock[0])
+        check("clock accrues while open", after_tick - clock[1] >= 9, (clock[1], after_tick))
 
-        conn.execute(
-            text("update public.work_orders set status='ASSIGNED', assigned_staff_code="
-                 "(select staff_code from public.staff_profiles order by staff_code limit 1) where id = :id"),
-            {"id": wo.id},
+        cur.execute(
+            "update public.work_orders set status='ASSIGNED', assigned_staff_code="
+            "(select staff_code from public.staff_profiles order by staff_code limit 1) where id = %(id)s",
+            {"id": wo[0]},
         )
         completed = scalar(
-            "select public.rpc_complete_work_order(:id, 'Replaced the hinge and aligned the door', 'facilities@nosih.edu.in')",
-            id=wo.id,
+            "select public.rpc_complete_work_order(%(id)s, 'Replaced the hinge and aligned the door', 'facilities@nosih.edu.in')",
+            id=wo[0],
         )
         check("work order completes", completed.get("success") is True, completed)
 
-        closed = conn.execute(
-            text("select closed_at, closed_reason, is_paused, elapsed_active_mins from public.sla_clocks where id = :id"),
-            {"id": clock.id},
-        ).one()
-        check("clock closes on completion", closed.closed_at is not None and closed.closed_reason == "WORK_ORDER_COMPLETED", closed)
-        check("closed clock is paused", closed.is_paused is True, closed.is_paused)
+        closed = row(
+            "select closed_at, closed_reason, is_paused, elapsed_active_mins from public.sla_clocks where id = %(id)s",
+            id=clock[0],
+        )
+        check("clock closes on completion", closed[0] is not None and closed[1] == "WORK_ORDER_COMPLETED", closed)
+        check("closed clock is paused", closed[2] is True, closed[2])
 
-        conn.execute(text("update public.sla_clocks set last_tick_at = now() - interval '10 minutes' where id = :id"), {"id": clock.id})
+        cur.execute("update public.sla_clocks set last_tick_at = now() - interval '10 minutes' where id = %(id)s",
+                    {"id": clock[0]})
         scalar("select public.rpc_tick_sla_clocks()")
-        frozen = scalar("select elapsed_active_mins from public.sla_clocks where id = :id", id=clock.id)
-        check("closed clock does not accrue", frozen == closed.elapsed_active_mins, (closed.elapsed_active_mins, frozen))
+        frozen = scalar("select elapsed_active_mins from public.sla_clocks where id = %(id)s", id=clock[0])
+        check("closed clock does not accrue", frozen == closed[3], (closed[3], frozen))
 
         reopened = scalar(
-            "select public.rpc_update_complaint_status(:id, 'OPEN', 'facilities@nosih.edu.in')", id=complaint_id
+            "select public.rpc_update_complaint_status(%(id)s, 'OPEN', 'facilities@nosih.edu.in')", id=complaint_id
         )
         check("complaint reopens", reopened.get("status") == "OPEN", reopened.get("status"))
-        live = conn.execute(
-            text("select closed_at, is_paused, elapsed_active_mins from public.sla_clocks where id = :id"),
-            {"id": clock.id},
-        ).one()
-        check("clock reopens with the complaint", live.closed_at is None and live.is_paused is False, live)
+        live = row(
+            "select closed_at, is_paused, elapsed_active_mins from public.sla_clocks where id = %(id)s",
+            id=clock[0],
+        )
+        check("clock reopens with the complaint", live[0] is None and live[1] is False, live)
 
-        conn.execute(text("update public.sla_clocks set last_tick_at = now() - interval '10 minutes' where id = :id"), {"id": clock.id})
+        cur.execute("update public.sla_clocks set last_tick_at = now() - interval '10 minutes' where id = %(id)s",
+                    {"id": clock[0]})
         scalar("select public.rpc_tick_sla_clocks()")
-        resumed = scalar("select elapsed_active_mins from public.sla_clocks where id = :id", id=clock.id)
-        check("reopened clock accrues again", resumed - live.elapsed_active_mins >= 9, (live.elapsed_active_mins, resumed))
+        resumed = scalar("select elapsed_active_mins from public.sla_clocks where id = %(id)s", id=clock[0])
+        check("reopened clock accrues again", resumed - live[2] >= 9, (live[2], resumed))
 
         resolved = scalar(
-            "select public.rpc_update_complaint_status(:id, 'RESOLVED', 'facilities@nosih.edu.in')", id=complaint_id
+            "select public.rpc_update_complaint_status(%(id)s, 'RESOLVED', 'facilities@nosih.edu.in')", id=complaint_id
         )
         check("complaint resolves", resolved.get("status") == "RESOLVED", resolved.get("status"))
-        final = conn.execute(
-            text("select closed_at, closed_reason from public.sla_clocks where id = :id"), {"id": clock.id}
-        ).one()
-        check("resolution closes the clock", final.closed_at is not None and final.closed_reason == "COMPLAINT_RESOLVED", final)
+        final = row("select closed_at, closed_reason from public.sla_clocks where id = %(id)s", id=clock[0])
+        check("resolution closes the clock", final[0] is not None and final[1] == "COMPLAINT_RESOLVED", final)
 
         # A completion that bypassed the completion RPC is caught by the tick.
-        conn.execute(
-            text("update public.sla_clocks set is_paused=false, closed_at=null, closed_reason=null, "
-                 "last_tick_at = now() - interval '5 minutes' where id = :id"),
-            {"id": clock.id},
+        cur.execute(
+            "update public.sla_clocks set is_paused=false, closed_at=null, closed_reason=null, "
+            "last_tick_at = now() - interval '5 minutes' where id = %(id)s",
+            {"id": clock[0]},
         )
-        conn.execute(text("update public.work_orders set status='COMPLETED' where id = :id"), {"id": wo.id})
+        cur.execute("update public.work_orders set status='COMPLETED' where id = %(id)s", {"id": wo[0]})
         scalar("select public.rpc_tick_sla_clocks()")
-        defensive = conn.execute(
-            text("select closed_at, closed_reason from public.sla_clocks where id = :id"), {"id": clock.id}
-        ).one()
-        check("tick closes a finished work order", defensive.closed_at is not None and defensive.closed_reason == "TARGET_RESOLVED", defensive)
+        defensive = row("select closed_at, closed_reason from public.sla_clocks where id = %(id)s", id=clock[0])
+        check("tick closes a finished work order", defensive[0] is not None and defensive[1] == "TARGET_RESOLVED", defensive)
 
         # Class strength: create a booking first, then raise the class above capacity.
-        day = scalar("select (current_date + ((8 - extract(isodow from current_date))::int % 7))::date")
-        free = conn.execute(
-            text(
-                "select r.code, g.period_number from public.rooms r "
-                "cross join generate_series(1, 6) as g(period_number) "
-                "where r.visual_state = 'HEALTHY' "
-                "  and jsonb_array_length(public.nosih_booking_conflicts(r.code, "
-                "      ((:day)::date + public.nosih_period_start(g.period_number)) at time zone 'Asia/Kolkata', "
-                "      ((:day)::date + public.nosih_period_end(g.period_number)) at time zone 'Asia/Kolkata')) = 0 "
-                " order by r.code, g.period_number limit 1"
-            ),
-            {"day": day},
-        ).one()
+        day = scalar("select (current_date + ((8 - extract(isodow from current_date))::int %% 7))::date")
+        free = row(
+            "select r.code, g.period_number from public.rooms r "
+            "cross join generate_series(1, 6) as g(period_number) "
+            "where r.visual_state = 'HEALTHY' "
+            "  and jsonb_array_length(public.nosih_booking_conflicts(r.code, "
+            "      ((%(day)s)::date + public.nosih_period_start(g.period_number)) at time zone 'Asia/Kolkata', "
+            "      ((%(day)s)::date + public.nosih_period_end(g.period_number)) at time zone 'Asia/Kolkata')) = 0 "
+            " order by r.code, g.period_number limit 1",
+            day=day,
+        )
         class_code = scalar("select class_code from public.student_classes where student_strength <= 60 order by class_code limit 1")
         booked = scalar(
             "select public.rpc_create_booking("
-            ":room, ((:day)::date + public.nosih_period_start(:period)) at time zone 'Asia/Kolkata', "
-            "((:day)::date + public.nosih_period_end(:period)) at time zone 'Asia/Kolkata', "
-            "'Strength review booking', :class_code, 'facilities@nosih.edu.in', 'verify-strength')",
-            room=free.code, day=str(day), period=free.period_number, class_code=class_code,
+            "%(room)s, ((%(day)s)::date + public.nosih_period_start(%(period)s)) at time zone 'Asia/Kolkata', "
+            "((%(day)s)::date + public.nosih_period_end(%(period)s)) at time zone 'Asia/Kolkata', "
+            "'Strength review booking', %(class_code)s, 'facilities@nosih.edu.in', 'verify-strength')",
+            room=free[0], day=str(day), period=free[1], class_code=class_code,
         )
         check("booking exists before the change", booked.get("success") is True, booked)
 
         changed = scalar(
-            "select public.rpc_set_class_strength(:class_code, 200, 'facilities@nosih.edu.in')",
+            "select public.rpc_set_class_strength(%(class_code)s, 200, 'facilities@nosih.edu.in')",
             class_code=class_code,
         )
         check("class strength changes", changed.get("success") is True and changed.get("student_strength") == 200, changed)
@@ -162,7 +156,7 @@ def main() -> None:
         check("future booking conflicts are reported", any(item.get("booking_id") == booked.get("booking_id") for item in booking_conflicts), booking_conflicts)
         check("change is flagged for review", changed.get("requires_review") is True, changed.get("requires_review"))
 
-        trans.rollback()
+        conn.rollback()
         print(f"\n{len(PASSED)} passed, {len(FAILED)} failed")
         if FAILED:
             print(json.dumps(FAILED, indent=2))

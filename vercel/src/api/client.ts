@@ -198,7 +198,7 @@ export type CommentSubmissionResponse = CommentApprovedResponse | ModerationReje
 
 export interface ComplaintFilters {
   zone?: 'ALL' | 'BLOCK_A' | 'BLOCK_B' | 'BLOCK_C' | 'LABS' | 'CANTEENS' | 'BILL_BOTS';
-  status?: ComplaintStatus | 'ALL';
+  status?: ComplaintStatus | 'ACTIVE' | 'ALL';
   category?: string;
   my_department?: boolean;
 }

@@ -21,7 +21,7 @@ packages/
   supabase-client/          shared typed client: auth, RPC wrappers, realtime
 services/nosih-api/         Python seed generator, migrations runner, verification scripts
 supabase/
-  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0027)
+  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0047)
   functions/                optional Edge Functions (email webhook, SLA tick) — not required
 docs/screenshots/           reference captures
 README.md  Makefile  docker-compose.yml
@@ -317,6 +317,7 @@ the procurement funnel.
 | `verify_sla_integrity.py` | close/freeze on completion, reopen without double counts, defensive tick, strength revalidation |
 | `verify_asset_history.py` | 50 priced repairs, parts/labour/total reconciliation, 24-hour downtime cap (a backdated 90-day ticket bills 1,440 min), open work order, empty record, RBAC and trigger pricing |
 | `verify_comment_ai.py` | Groq endpoint/model, model verdicts for a fair complaint and an insult, rewrite returned on the real comment RPC, held row kept out of the feed |
+| `verify_demo_curation.py` | demo gate: exactly three live tickets, C1-02 carries only the front-row fan and light, one lab bench, one bill bot rerouted to BOT-04, the rest repaired with history, feed defaults to active |
 | `verify_ai_keys.py` | multi-key pool, Groq routing, key material and the raw HTTP helper denied to browser roles, successive model calls succeed while rotating keys |
 | `verify_rbac_matrix.py` | 8 role sign-ins, department-scoped work orders/SLA/PRs, audit and directory lockdown, forged-email denial, cross-department approval, self-approval |
 | `verify_chat.py` | question reaches the model, grounded codes, multi-turn, ownership guard |
@@ -337,7 +338,7 @@ service directory *and* an exported `DATABASE_URL`).
 |---|---|
 | `web` | `npm ci`, TypeScript typecheck for both portals, production build |
 | `api` | API unit tests, offline 27-table seed and SHA-256 audit chain (`verify_phase1.py`) |
-| `live` | manual only: runs `verify_all.py` against the project when the `DATABASE_URL` secret exists |
+| `live` | manual only: runs `verify_all.py` and `verify_demo_curation.py` against the project when the `DATABASE_URL` secret exists |
 
 The live job is read/write but rolls every mutation back; add `DATABASE_URL` as a repository secret to
 enable it. Without the secret the job passes with a notice instead of failing.
@@ -350,9 +351,12 @@ enable it. Without the secret the job passes with a notice instead of failing.
   refresh; secondary pages and every admin workspace are lazy chunks (the sign-in gate no longer
   downloads three.js or recharts); the Vite config preconnects to `VITE_SUPABASE_URL` and an
   expired token now returns the shell to the sign-in gate instead of leaving panels on silent 401s.
-- Migrations `0001–0046` are applied in order with `apply_sql_file.py`; each is idempotent. The
-  community feed returns 10 rows, active work first, then the newest resolved history. The five
-  live tickets carry a seeded conversation (`scripts/f9_demo_comments.sql`) for the demo.
+- Migrations `0001–0047` are applied in order with `apply_sql_file.py`; each is idempotent. The
+  community feed defaults to `ACTIVE` reports; resolved history stays one filter away. The curated
+  demo state (`scripts/f10_curate_demo.sql`) leaves three live tickets, each with a seeded
+  conversation: C1-02 (front-row fan and light), LAB-PHYS-04 (bench 14) and BOT-03 (thermal head,
+  rerouted to BOT-04). Every other ticket is repaired, every other fixture is operational, and the
+  twin shows exactly three major faults.
 - Document numbers (tickets, work orders, incidents) draw from one monotonic sequence with unique
   indexes, so the campus pulse cron can never collide with an interactive session — before migration
   `0034` a concurrent tick and submit could mint the same work-order number and price a repair at zero.

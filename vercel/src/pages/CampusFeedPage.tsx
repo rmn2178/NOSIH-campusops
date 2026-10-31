@@ -19,22 +19,23 @@ const zones: Array<{ value: NonNullable<ComplaintFilters['zone']>; label: string
   { value: 'CANTEENS', label: 'Canteens' },
   { value: 'BILL_BOTS', label: 'Bill Bots' },
 ];
-const statuses: Array<{ value: ComplaintStatus | 'ALL'; label: string }> = [
-  { value: 'ALL', label: 'All statuses' },
+const statuses: Array<{ value: ComplaintStatus | 'ACTIVE' | 'ALL'; label: string }> = [
+  { value: 'ACTIVE', label: 'Active reports' },
   { value: 'OPEN', label: 'Open' },
   { value: 'IN_PROGRESS', label: 'In Progress' },
   { value: 'BLOCKED_PARTS', label: 'Blocked on Parts' },
   { value: 'RESOLVED', label: 'Resolved' },
+  { value: 'ALL', label: 'All statuses' },
 ];
 
 interface ActiveFilters {
   zone: NonNullable<ComplaintFilters['zone']>;
-  status: ComplaintStatus | 'ALL';
+  status: ComplaintStatus | 'ACTIVE' | 'ALL';
   category: string;
   myDepartment: boolean;
 }
 
-const initialFilters: ActiveFilters = { zone: 'ALL', status: 'ALL', category: 'ALL', myDepartment: false };
+const initialFilters: ActiveFilters = { zone: 'ALL', status: 'ACTIVE', category: 'ALL', myDepartment: false };
 
 const FEED_CACHE = 'nosih.feed.snapshot.v1';
 const filterKey = (filters: ActiveFilters) => JSON.stringify([
@@ -62,7 +63,9 @@ function writeFeedCache(filters: ActiveFilters, rows: Complaint[]) {
 }
 
 function matchesFilters(complaint: Complaint, filters: ActiveFilters, department?: string): boolean {
-  if (filters.status !== 'ALL' && complaint.status !== filters.status) return false;
+  if (filters.status === 'ACTIVE') {
+    if (complaint.status === 'RESOLVED') return false;
+  } else if (filters.status !== 'ALL' && complaint.status !== filters.status) return false;
   if (filters.category !== 'ALL' && complaint.category !== filters.category) return false;
   if (filters.myDepartment && complaint.reporter_department !== department) return false;
   if (filters.zone === 'ALL') return true;

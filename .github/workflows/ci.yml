@@ -80,6 +80,10 @@ jobs:
         if: env.DATABASE_URL != ''
         working-directory: services/nosih-api
         run: python scripts/verify_all.py
+      - name: Verify the curated demo state
+        if: env.DATABASE_URL != ''
+        working-directory: services/nosih-api
+        run: python scripts/verify_demo_curation.py
       - name: Explain skipped live gate
         if: env.DATABASE_URL == ''
         run: echo "::notice::DATABASE_URL secret is not configured, so the live verification gate was skipped."
