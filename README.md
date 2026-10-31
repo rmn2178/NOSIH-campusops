@@ -437,9 +437,28 @@ npm run dev:admin          # http://localhost:5174
 ```
 
 Portal env: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`. Server secrets stay in Vault.
-Sign in with a seeded student (`aids1a01@nosih.edu.in`), a department manager (`hod.cse@nosih.edu.in`)
-or an admin account (`facilities@nosih.edu.in`); the demo password is shown on the login screen.
-Rotate it and disable the demo accounts before exposing a public deployment.
+Every seeded account shares the demo password printed on the login screen (`Nosih@2026`). Rotate it
+and disable the demo accounts before exposing a public deployment.
+
+Run `services/nosih-api/scripts/list_logins.py` for the live inventory (role, email, name and
+whether an auth seat exists). The seeded seats that are ready to sign in:
+
+| Role | Sign-in | Note |
+|---|---|---|
+| Student | `aids1a01@nosih.edu.in` | no booking system, no `/bookings` route |
+| Student | `aids2a01@nosih.edu.in`, `mech1a01@nosih.edu.in`, … | roll 01 of every class, 90 students seated |
+| Faculty | `fac001@nosih.edu.in` | room booking, class strength, own bookings |
+| Faculty | `fac016@`, `fac031@`, `fac046@`, `fac061@`, `fac076@` | one per department, 6 seated of 120 |
+| Lab staff | `labstf001@nosih.edu.in` | operational reader |
+| Department manager | `hod.cse@nosih.edu.in` | `hod.aids@`, `hod.aiml@`, `hod.cyber@`, `hod.ece@`, `hod.mech@` |
+| Facilities admin | `facilities@nosih.edu.in` | dispatch, bookings, ₹10,000 approvals |
+| Incident manager | `incident@nosih.edu.in` | dispatch, relocation, moderation |
+| Procurement approver | `procurement@nosih.edu.in` | ₹100,000 approvals, stock receipt |
+| System admin | `sysadmin@nosih.edu.in` | break-glass |
+| Maintenance | `maint01@nosih.edu.in` … `maint12@nosih.edu.in` | technicians, 12 seated of 30 |
+
+`seed_role_logins.py --all` seats every remaining non-student profile; `seed_student_auth.py` seats
+the roll-01 student of every class.
 
 `vercel/` is a self-contained copy of the complaint portal for upload to Vercel. It has its own
 `package.json`, lockfile, env template and `vercel.json`, runs on port 5180, and is built by CI;

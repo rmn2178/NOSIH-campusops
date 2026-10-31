@@ -95,19 +95,27 @@ npx vercel --prod     # production
 
 ## Demo accounts
 
-The login screen itself states the demo password (`Nosih@2026`). Useful
-accounts:
+The login screen itself states the demo password (`Nosih@2026`). Every seeded
+account shares it. Useful accounts:
 
-| Role | Email |
-|---|---|
-| Student | `aids1a01@nosih.edu.in` |
-| Facilities admin | `facilities@nosih.edu.in` |
-| System admin | `sysadmin@nosih.edu.in` |
-| Department manager | `hod.cse@nosih.edu.in` |
+| Role | Email | Note |
+|---|---|---|
+| Student | `aids1a01@nosih.edu.in` | no booking system, no `/bookings` route |
+| Student | `aids2a01@`, `mech1a01@`, `cse3b01@`, … | roll 01 of every class, 90 students seated |
+| Faculty | `fac001@nosih.edu.in` | room booking, class strength, own bookings |
+| Faculty | `fac016@`, `fac031@`, `fac046@`, `fac061@`, `fac076@` | one per department |
+| Lab staff | `labstf001@nosih.edu.in` | operational reader |
+| Department manager | `hod.cse@nosih.edu.in` | `hod.aids@`, `hod.aiml@`, `hod.cyber@`, `hod.ece@`, `hod.mech@` |
+| Facilities admin | `facilities@nosih.edu.in` | dispatch, bookings, ₹10,000 approvals |
+| Incident manager | `incident@nosih.edu.in` | dispatch, relocation, moderation |
+| Procurement approver | `procurement@nosih.edu.in` | ₹100,000 approvals, stock receipt |
+| System admin | `sysadmin@nosih.edu.in` | break-glass |
+| Maintenance | `maint01@nosih.edu.in` … `maint12@nosih.edu.in` | technicians |
 
-Before sharing a public URL, rotate the seeded password and remove or disable
-the demo accounts. The password is present in the repository history and on
-the login screen, so it must not protect anything real.
+`services/nosih-api/scripts/list_logins.py` prints the live inventory for the
+whole project. Before sharing a public URL, rotate the seeded password and
+remove or disable the demo accounts. The password is present in the repository
+history and on the login screen, so it must not protect anything real.
 
 ## Keeping the copy current
 
