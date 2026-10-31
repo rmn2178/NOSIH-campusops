@@ -55,16 +55,38 @@ def main() -> None:
         complaint_id = submitted["complaint"]["id"]
         wo = row("select id, wo_number from public.work_orders where complaint_id = %(id)s order by id desc limit 1",
                  id=complaint_id)
-        clock = row("select id, elapsed_active_mins from public.sla_clocks "
+        clock = row("select id, elapsed_active_mins, is_24x7 from public.sla_clocks "
                     "where target_type = 'WORK_ORDER' and target_id = %(id)s order by id desc limit 1",
                     id=wo[0])
         print(f"ticket {submitted['complaint']['ticket_number']} · {wo[1]} · clock {clock[0]}")
 
-        cur.execute("update public.sla_clocks set last_tick_at = now() - interval '10 minutes' where id = %(id)s",
-                    {"id": clock[0]})
+        # A clock accrues operational minutes, not wall-clock minutes: a weekend or a
+        # campus holiday contributes nothing, so a ten-minute rewind is not enough to
+        # prove accrual. Rewind to the last working day's opening instead, which
+        # always contains real operating time whatever the day of the week.
+        anchor = scalar(
+            "select max(open_at) from ("
+            "  select (g.d::date + make_interval(mins => coalesce(c.open_minute, 540))) at time zone 'Asia/Kolkata' as open_at"
+            "    from generate_series(current_date - 30, current_date, interval '1 day') g(d)"
+            "    left join public.sla_calendar_days c on c.day_date = g.d::date"
+            "   where extract(isodow from g.d) between 1 and 5 and coalesce(c.is_working_day, true)"
+            ") t where open_at < now()"
+        )
+
+        def rewind(clock_id: int) -> float:
+            """Rewind the clock to the anchor, clear any pause, return the minutes owed."""
+            cur.execute(
+                "update public.sla_clocks set last_tick_at = %(anchor)s, is_paused = false where id = %(id)s",
+                {"anchor": anchor, "id": clock_id},
+            )
+            return scalar("select public.nosih_sla_operating_minutes(%(anchor)s, now(), %(x7)s)",
+                          anchor=anchor, x7=clock[2])
+
+        owed = rewind(clock[0])
         scalar("select public.rpc_tick_sla_clocks()")
         after_tick = scalar("select elapsed_active_mins from public.sla_clocks where id = %(id)s", id=clock[0])
-        check("clock accrues while open", after_tick - clock[1] >= 9, (clock[1], after_tick))
+        check("clock accrues while open", owed > 0 and abs((after_tick - clock[1]) - owed) <= 1,
+              (clock[1], after_tick, owed))
 
         cur.execute(
             "update public.work_orders set status='ASSIGNED', assigned_staff_code="
@@ -84,8 +106,8 @@ def main() -> None:
         check("clock closes on completion", closed[0] is not None and closed[1] == "WORK_ORDER_COMPLETED", closed)
         check("closed clock is paused", closed[2] is True, closed[2])
 
-        cur.execute("update public.sla_clocks set last_tick_at = now() - interval '10 minutes' where id = %(id)s",
-                    {"id": clock[0]})
+        cur.execute("update public.sla_clocks set last_tick_at = %(anchor)s where id = %(id)s",
+                    {"anchor": anchor, "id": clock[0]})
         scalar("select public.rpc_tick_sla_clocks()")
         frozen = scalar("select elapsed_active_mins from public.sla_clocks where id = %(id)s", id=clock[0])
         check("closed clock does not accrue", frozen == closed[3], (closed[3], frozen))
@@ -100,11 +122,11 @@ def main() -> None:
         )
         check("clock reopens with the complaint", live[0] is None and live[1] is False, live)
 
-        cur.execute("update public.sla_clocks set last_tick_at = now() - interval '10 minutes' where id = %(id)s",
-                    {"id": clock[0]})
+        owed = rewind(clock[0])
         scalar("select public.rpc_tick_sla_clocks()")
         resumed = scalar("select elapsed_active_mins from public.sla_clocks where id = %(id)s", id=clock[0])
-        check("reopened clock accrues again", resumed - live[2] >= 9, (live[2], resumed))
+        check("reopened clock accrues again", owed > 0 and abs((resumed - live[2]) - owed) <= 1,
+              (live[2], resumed, owed))
 
         resolved = scalar(
             "select public.rpc_update_complaint_status(%(id)s, 'RESOLVED', 'facilities@nosih.edu.in')", id=complaint_id

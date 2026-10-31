@@ -160,6 +160,28 @@ export const rpc = {
   rankStaff: (workOrderId: number) =>
     supabase.rpc('rpc_rank_staff_for_work_order', { p_work_order_id: workOrderId }).then(unwrap),
 
+  slaMatrix: () => supabase.rpc('rpc_sla_matrix').then(unwrap),
+
+  slaBoard: (state: string = 'ALL', limit: number = 120) =>
+    supabase.rpc('rpc_sla_board', { p_state: state, p_limit: limit }).then(unwrap),
+
+  slaCompliance: (days: number = 30) =>
+    supabase.rpc('rpc_sla_compliance', { p_days: days }).then(unwrap),
+
+  slaPauseClock: (workOrderId: number, reason: string, email: string) =>
+    supabase
+      .rpc('rpc_sla_pause_clock', {
+        p_work_order_id: workOrderId,
+        p_reason: reason,
+        p_actor_email: email,
+      })
+      .then(unwrap),
+
+  slaResumeClock: (workOrderId: number, email: string) =>
+    supabase
+      .rpc('rpc_sla_resume_clock', { p_work_order_id: workOrderId, p_actor_email: email })
+      .then(unwrap),
+
   workforceSummary: () => supabase.rpc('rpc_workforce_summary').then(unwrap),
 
   staffProfile: (staffCode: string) =>

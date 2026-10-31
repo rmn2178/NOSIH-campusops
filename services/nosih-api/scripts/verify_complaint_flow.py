@@ -85,13 +85,23 @@ def main() -> None:
             check("work order skill is plumbing", skill == "PLUMBING", skill)
             check("priority reflects urgency", float(priority) >= 50, priority)
 
-            cur.execute("""select response_target_mins, resolution_target_mins, is_paused
+            cur.execute("""select response_target_mins, resolution_target_mins, is_paused, priority_code
                              from public.sla_clocks where target_type = 'WORK_ORDER' and target_id = %s""", (wo_id,))
             clock = cur.fetchone()
             check("SLA clock created", clock is not None, clock)
             if clock:
-                check("SLA targets match urgency", clock[0] in (10, 30, 120, 240) and clock[1] in (60, 240, 1440, 2880), clock[:2])
-                check("SLA clock running", clock[2] is False, clock[2])
+                cur.execute("select category, urgency from public.complaints where id = %s", (cid,))
+                category, urgency = cur.fetchone()
+                cur.execute("select public.nosih_sla_policy_for(%s, %s)", (urgency, category))
+                policy = cur.fetchone()[0]
+                check("SLA targets come from the matrix",
+                      clock[0] == policy["response_target_mins"]
+                      and clock[1] == policy["resolution_target_mins"]
+                      and clock[3] == policy["priority_code"],
+                      (clock[:2], clock[3], policy["priority_code"]))
+                # The AI asked the reporter for more details, so the clock waits
+                # for the answer instead of running against the requester.
+                check("SLA clock waits for the reporter", clock[2] is True, clock[2])
 
         cur.execute("select visual_state from public.rooms where code = %s", (SPACE,))
         state = cur.fetchone()[0]

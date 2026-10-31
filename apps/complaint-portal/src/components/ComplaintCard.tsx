@@ -2,7 +2,8 @@ import { forwardRef } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowUpRight, Clock3, HardHat, Image as ImageIcon, LoaderCircle, MessageCircle, Users } from 'lucide-react';
 import type { Complaint } from '../api/client';
-import { areaLabel, formatDate, slaLabel, statusLabel, twinLabel, urgencyLabel } from '../lib/format';
+import { areaLabel, cx, formatDate, slaLabel, statusLabel, twinLabel, urgencyLabel } from '../lib/format';
+import { SlaBadge } from './Sla';
 import { StatusPill, toneForStatus } from './StatusPill';
 
 interface ComplaintCardProps {
@@ -71,6 +72,35 @@ export const ComplaintCard = forwardRef<HTMLElement, ComplaintCardProps>(functio
           </p>
         )}
 
+        {complaint.sla?.available && (
+          <div className="mt-4">
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] font-semibold uppercase tracking-wider text-stone">SLA</span>
+              <SlaBadge sla={complaint.sla} />
+              <span className="ml-auto text-[9px] uppercase tracking-wider text-stone">
+                {complaint.sla.is_24x7 ? '24×7 clock' : 'working hours'}
+              </span>
+            </div>
+            <div className="mt-2 h-1 overflow-hidden rounded-full bg-silk">
+              <div
+                className={cx(
+                  'h-full rounded-full',
+                  complaint.sla.state === 'BREACHED'
+                    ? 'bg-red-500'
+                    : complaint.sla.state === 'WARNING'
+                      ? 'bg-amber-500'
+                      : complaint.sla.state === 'PAUSED'
+                        ? 'bg-purple-400'
+                        : complaint.sla.state === 'CLOSED'
+                          ? 'bg-stitch'
+                          : 'bg-emerald-500',
+                )}
+                style={{ width: `${Math.max(2, Math.min(100, complaint.sla.resolution_progress_pct))}%` }}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="mt-5 flex items-center gap-2 border-t border-stitch pt-4">
           <span className={`flex h-7 w-7 items-center justify-center rounded-full border border-stitch ${complaint.is_anonymous ? 'bg-silk' : 'bg-white'}`}>
             {complaint.photo_url ? <ImageIcon size={13} className="text-stone" /> : <Users size={13} className="text-stone" />}
@@ -79,7 +109,9 @@ export const ComplaintCard = forwardRef<HTMLElement, ComplaintCardProps>(functio
             <p className="truncate text-[11px] font-medium">{complaint.reporter_label}</p>
             <p className="mt-0.5 text-[9px] uppercase tracking-wider text-stone">{complaint.is_anonymous ? 'Vault protected' : 'Verified reporter'}</p>
           </div>
-          <span className="ml-auto flex items-center gap-1.5 text-[10px] text-stone"><Clock3 size={12} /><span className="mono">{slaLabel(complaint)}</span></span>
+          <span className="ml-auto flex items-center gap-1.5 text-[10px] text-stone">
+            {complaint.sla?.available ? null : <><Clock3 size={12} /><span className="mono">{slaLabel(complaint)}</span></>}
+          </span>
         </div>
       </div>
 

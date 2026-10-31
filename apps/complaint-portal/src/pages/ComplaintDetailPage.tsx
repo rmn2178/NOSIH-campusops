@@ -5,6 +5,7 @@ import { ArrowLeft, Clock3, HardHat, LoaderCircle, MessageCircle, ShieldQuestion
 import { api } from '../api/client';
 import type { Complaint } from '../api/client';
 import { CommentThread } from '../components/CommentThread';
+import { SlaBadge, SlaPanel } from '../components/Sla';
 import { StatusPill, toneForStatus } from '../components/StatusPill';
 import { areaLabel, cx, formatDate, slaLabel, statusLabel, twinLabel, urgencyLabel } from '../lib/format';
 
@@ -97,7 +98,11 @@ export function ComplaintDetailPage() {
           <div className="flex flex-wrap items-center gap-2">
             <StatusPill label={twinLabel(complaint.twin_state)} tone={toneForStatus(complaint.twin_state)} dot />
             <StatusPill label={statusLabel(complaint.status)} tone={toneForStatus(complaint.status)} />
-            <span className="ml-auto flex items-center gap-1.5 text-[10px] text-stone"><Clock3 size={12} /><span className="mono">{slaLabel(complaint)}</span></span>
+            <span className="ml-auto flex items-center gap-1.5 text-[10px] text-stone">
+              {complaint.sla?.available ? <SlaBadge sla={complaint.sla} showPriority={false} /> : (
+                <><Clock3 size={12} /><span className="mono">{slaLabel(complaint)}</span></>
+              )}
+            </span>
           </div>
 
           <p className="mt-4 whitespace-pre-wrap text-sm leading-6 text-ink">{complaint.description}</p>
@@ -160,14 +165,18 @@ export function ComplaintDetailPage() {
           {error && <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">{error}</p>}
         </section>
 
-        <section ref={threadRef} id="comments" className="cloth-card flex max-h-[76vh] min-h-[420px] flex-col overflow-hidden scroll-mt-24" aria-label="Community thread">
-          <div className="flex items-center gap-2 border-b border-stitch px-5 py-4">
-            <MessageCircle size={16} />
-            <h2 className="text-sm font-semibold">Community thread</h2>
-            <span className="mono ml-auto rounded-full bg-silk px-2 py-0.5 text-[10px]">{complaint.comment_count}</span>
-          </div>
-          <CommentThread complaint={complaint} onCommentAdded={() => setComplaint((current) => current ? { ...current, comment_count: current.comment_count + 1 } : current)} />
-        </section>
+        <div className="space-y-5">
+          <SlaPanel sla={complaint.sla} />
+
+          <section ref={threadRef} id="comments" className="cloth-card flex max-h-[76vh] min-h-[420px] flex-col overflow-hidden scroll-mt-24" aria-label="Community thread">
+            <div className="flex items-center gap-2 border-b border-stitch px-5 py-4">
+              <MessageCircle size={16} />
+              <h2 className="text-sm font-semibold">Community thread</h2>
+              <span className="mono ml-auto rounded-full bg-silk px-2 py-0.5 text-[10px]">{complaint.comment_count}</span>
+            </div>
+            <CommentThread complaint={complaint} onCommentAdded={() => setComplaint((current) => current ? { ...current, comment_count: current.comment_count + 1 } : current)} />
+          </section>
+        </div>
       </div>
     </div>
   );

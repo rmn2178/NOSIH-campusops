@@ -21,7 +21,7 @@ packages/
   supabase-client/          shared typed client: auth, RPC wrappers, realtime
 services/nosih-api/         Python seed generator, migrations runner, verification scripts
 supabase/
-  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0052)
+  migrations/               schema, RLS, RPCs, AI, identity, live clock, bookings (0001–0057)
   functions/                optional Edge Functions (email webhook, SLA tick) — not required
 docs/screenshots/           reference captures
 README.md  Makefile  docker-compose.yml
@@ -151,6 +151,9 @@ Each room owns 22 assets; every space is addressable by a canonical code (`C4-03
 **Scheduling** — `rpc_get_room_relocation_candidates`, `rpc_execute_room_relocation`,
 `rpc_create_booking`, `rpc_cancel_booking`, `rpc_list_bookings`, `rpc_get_room_occupancy`,
 `nosih_booking_conflicts`, `nosih_booking_alternatives`, `rpc_bookable_rooms`, `rpc_my_bookings`, `nosih_booking_role_allowed`, `rpc_set_class_strength`.
+**SLA** — `rpc_sla_matrix`, `rpc_sla_board`, `rpc_sla_compliance`, `rpc_sla_pause_clock`,
+`rpc_sla_resume_clock`, `nosih_sla_snapshot`, `nosih_sla_policy_for`, `nosih_sla_operating_minutes`,
+`nosih_sla_working_minutes`, `nosih_sla_calendar`, `nosih_sla_scope_visible`.
 **Stock & money** — `rpc_parts_preflight`, `rpc_reserve_parts_for_work_order`, `rpc_purchase_preflight`,
 `rpc_decide_purchase_request`, `rpc_receive_purchase_request_stock`, `rpc_approve_repair`,
 `rpc_complete_work_order`, `rpc_update_complaint_status`.
@@ -211,6 +214,46 @@ only applies when the provider is unreachable.
 Asset suggestions are guarded: the model can only mark equipment the report actually mentions.
 
 ---
+
+## 6b. The SLA system
+
+A campus SLA is a policy, so it lives in the database and both portals read it.
+
+**The matrix** (`sla_policies`) gives every priority two deadlines - a response deadline and a
+resolution deadline - plus the service that owns it and the 24x7 carve-out:
+
+| Priority | Service | Response | Resolution | Basis |
+|---|---|---|---|---|
+| P1 Critical | Campus Facilities & Safety | 30 min | 4 h | 24×7 clock |
+| P1 Critical (SAFETY_FIRE) | Campus Facilities & Safety | 15 min | 2 h | 24×7 clock |
+| P2 Urgent | Campus IT | 2 working h | 8 working h | working hours |
+| P2 Urgent (IT_AV) | Campus IT | 1 working h | 4 working h | working hours |
+| P3 Standard | Campus Maintenance | 4 working h | 48 working h | working hours |
+| P4 Low | Campus Administration | 24 working h | 5 working days | working hours |
+
+**The calendar** (`sla_calendar_days`) decides when the clock runs: 09:00-15:00 IST on teaching days,
+a longer 08:00-16:00 window during exam week, and no clock at all on weekends, the Diwali vacation,
+the semester break or Founders Day. `nosih_sla_operating_minutes()` counts only the minutes the campus
+was open, so a request raised on a Friday evening is not late on Monday morning. A 24x7 service
+accrues the wall clock instead.
+
+**The engine** (`rpc_tick_sla_clocks`, every minute) keeps four promises. The response clock stops at
+the first staff reply. Half the resolution time is a milestone that tells the officer and the head of
+department; 75% is a warning; 100% is a breach that raises the escalation tier and notifies the
+chain. A breached critical request is handed to the next ranked officer. Asking the reporter for more
+details pauses the clock; the answer restarts it. Staff can pause and restart a clock by hand
+(`rpc_sla_pause_clock`, `rpc_sla_resume_clock`) with five allowed reasons, and a student cannot.
+
+**The read models** are `rpc_sla_matrix()` (the policy and the calendar), `rpc_sla_board()` (every live
+clock with its officer, its head of department and its countdown) and `rpc_sla_compliance(days)` (the
+percentage of SLAs met per department, per priority and per service). The complaint portal renders the
+per-ticket snapshot `nosih_sla_snapshot()` as a colour-coded badge, a live countdown and a milestone
+track; the admin console renders the matrix, the live clocks and the compliance report. A student sees
+the badge on their own ticket but cannot read the board or the compliance report.
+
+**The scope** follows the rest of the platform: a department manager opens the console and finds only
+the clocks, the compliance figures and the pause control of their own department, while the campus
+roles keep the full view. A student is refused everything except their own ticket.
 
 ## 7. Workflows
 
@@ -324,6 +367,7 @@ the procurement funnel.
 | `verify_comment_ai.py` | Groq endpoint/model, model verdicts for a fair complaint and an insult, rewrite returned on the real comment RPC, held row kept out of the feed |
 | `verify_demo_curation.py` | demo gate: exactly three live tickets, C1-02 carries only the front-row fan and light, one lab bench, one bill bot rerouted to BOT-04, the rest repaired with history, feed defaults to active |
 | `verify_officer_booking.py` | every request gets an area officer (gates, area, audit), leave hands the job over, faculty booking accepted, double booking and class and capacity refused, retries idempotent, every booking RPC refuses a student, a technician may book |
+| `verify_sla_system.py` | the SLA matrix and its category overrides, the operating calendar (weekend, holiday, after hours, 24x7), a request born with the right deadlines, the tick, the half-time milestone, the warning, the breach and the hand-over, the response clock, pause and resume, the board and the compliance report, a student refused, a department manager kept inside their own department |
 | `verify_portal_booking.py` | the browser contract over HTTP: faculty sign-in, room calendar, own bookings, a real booking and its release, officers in the feed, a student sign-in refused by every booking endpoint |
 | `verify_ai_keys.py` | multi-key pool, Groq routing, key material and the raw HTTP helper denied to browser roles, successive model calls succeed while rotating keys |
 | `verify_rbac_matrix.py` | 8 role sign-ins, department-scoped work orders/SLA/PRs, audit and directory lockdown, forged-email denial, cross-department approval, self-approval |
@@ -345,7 +389,7 @@ service directory *and* an exported `DATABASE_URL`).
 |---|---|
 | `web` | `npm ci`, TypeScript typecheck for both portals, production build |
 | `api` | API unit tests, offline 27-table seed and SHA-256 audit chain (`verify_phase1.py`) |
-| `live` | manual only: runs `verify_all.py`, `verify_demo_curation.py`, `verify_officer_booking.py` and `verify_portal_booking.py` against the project when the `DATABASE_URL` secret exists |
+| `live` | manual only: runs `verify_all.py`, `verify_demo_curation.py`, `verify_officer_booking.py`, `verify_sla_system.py` and `verify_portal_booking.py` against the project when the `DATABASE_URL` secret exists |
 
 The live job is read/write but rolls every mutation back; add `DATABASE_URL` as a repository secret to
 enable it. Without the secret the job passes with a notice instead of failing.
@@ -384,6 +428,14 @@ enable it. Without the secret the job passes with a notice instead of failing.
   student, so a technician or a lab assistant may book a room and cancel their own booking, while
   cancelling somebody else's still needs the owner, the owner's department manager or an
   administrator.
+- The SLA engine (migrations `0053`-`0056`) replaced the hardcoded urgency-to-minutes expression with
+  a policy matrix, a campus operating calendar and a clock that counts only the time the campus was
+  open. Existing clocks were re-based onto the calendar, and the response deadline was backfilled from
+  the recorded repair times, so the history and the new requests are read on the same basis.
+- Migration `0057` puts the SLA console inside the department scope that the rest of the platform
+  already follows: a department manager reads and pauses only the clocks of their own department,
+  because the board, the compliance report and the pause control are `SECURITY DEFINER` functions and
+  would otherwise walk past the row level security on the tables.
 - The exam schedule joins row level security in migration `0052` — it was the last table without it,
   so a student could read the whole campus exam grid straight from the table. The grid is a
   scheduling table, so it follows the booking rule: staff read it, students do not. The booking

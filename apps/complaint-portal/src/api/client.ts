@@ -201,6 +201,50 @@ export interface FirstResponse {
   affected_count?: number | null;
 }
 
+export interface SlaMilestone {
+  key: string;
+  label: string;
+  target_mins: number;
+  elapsed_mins: number;
+  reached: boolean;
+  breached: boolean;
+}
+
+export type SlaState = 'HEALTHY' | 'WARNING' | 'BREACHED' | 'PAUSED' | 'CLOSED';
+export type SlaResponseState = 'PENDING' | 'MET' | 'WARNING' | 'BREACHED';
+
+export interface SlaSnapshot {
+  available: boolean;
+  state: SlaState;
+  breach_state: string;
+  priority_code?: string | null;
+  priority_label?: string | null;
+  service_name?: string | null;
+  policy_note?: string | null;
+  is_24x7: boolean;
+  basis: 'CLOCK' | 'WORKING';
+  response_state: SlaResponseState;
+  first_response_at?: string | null;
+  response_target_mins: number;
+  response_elapsed_mins: number;
+  response_remaining_mins: number;
+  response_progress_pct: number;
+  resolution_target_mins: number;
+  resolution_elapsed_mins: number;
+  resolution_remaining_mins: number;
+  resolution_progress_pct: number;
+  pause_reason?: string | null;
+  last_milestone?: string | null;
+  escalation_tier: number;
+  escalated_at?: string | null;
+  closed_at?: string | null;
+  closed_reason?: string | null;
+  work_order_id?: number | null;
+  work_order_number?: string | null;
+  due_at?: string | null;
+  milestones: SlaMilestone[];
+}
+
 export interface Complaint {
   id: string;
   ticket_number: string;
@@ -223,6 +267,7 @@ export interface Complaint {
   sla_target_minutes: number;
   sla_due_at?: string | null;
   sla_breach_state?: 'ON_TRACK' | 'WARNING_75' | 'BREACHED_100' | 'PAUSED' | null;
+  sla?: SlaSnapshot | null;
   officer?: ComplaintOfficer | null;
   created_at: string;
   updated_at: string;
@@ -371,6 +416,50 @@ async function loadProfile(): Promise<Record<string, unknown>> {
   return data as Record<string, unknown>;
 }
 
+/** The SLA snapshot the server attaches to every ticket. */
+export function mapSlaSnapshot(raw: Record<string, unknown>): SlaSnapshot {
+  return {
+    available: Boolean(raw.available),
+    state: (String(raw.state ?? 'HEALTHY') as SlaState),
+    breach_state: String(raw.breach_state ?? 'HEALTHY'),
+    priority_code: (raw.priority_code as string) ?? null,
+    priority_label: (raw.priority_label as string) ?? null,
+    service_name: (raw.service_name as string) ?? null,
+    policy_note: (raw.policy_note as string) ?? null,
+    is_24x7: Boolean(raw.is_24x7),
+    basis: (String(raw.basis ?? 'WORKING') as 'CLOCK' | 'WORKING'),
+    response_state: (String(raw.response_state ?? 'PENDING') as SlaResponseState),
+    first_response_at: (raw.first_response_at as string) ?? null,
+    response_target_mins: Number(raw.response_target_mins ?? 0),
+    response_elapsed_mins: Number(raw.response_elapsed_mins ?? 0),
+    response_remaining_mins: Number(raw.response_remaining_mins ?? 0),
+    response_progress_pct: Number(raw.response_progress_pct ?? 0),
+    resolution_target_mins: Number(raw.resolution_target_mins ?? 0),
+    resolution_elapsed_mins: Number(raw.resolution_elapsed_mins ?? 0),
+    resolution_remaining_mins: Number(raw.resolution_remaining_mins ?? 0),
+    resolution_progress_pct: Number(raw.resolution_progress_pct ?? 0),
+    pause_reason: (raw.pause_reason as string) ?? null,
+    last_milestone: (raw.last_milestone as string) ?? null,
+    escalation_tier: Number(raw.escalation_tier ?? 1),
+    escalated_at: (raw.escalated_at as string) ?? null,
+    closed_at: (raw.closed_at as string) ?? null,
+    closed_reason: (raw.closed_reason as string) ?? null,
+    work_order_id: raw.work_order_id ? Number(raw.work_order_id) : null,
+    work_order_number: (raw.work_order_number as string) ?? null,
+    due_at: (raw.due_at as string) ?? null,
+    milestones: Array.isArray(raw.milestones)
+      ? (raw.milestones as Array<Record<string, unknown>>).map((milestone) => ({
+          key: String(milestone.key ?? ''),
+          label: String(milestone.label ?? ''),
+          target_mins: Number(milestone.target_mins ?? 0),
+          elapsed_mins: Number(milestone.elapsed_mins ?? 0),
+          reached: Boolean(milestone.reached),
+          breached: Boolean(milestone.breached),
+        }))
+      : [],
+  };
+}
+
 export function mapComplaint(raw: Record<string, unknown>): Complaint {
   return {
     id: String(raw.id),
@@ -402,6 +491,7 @@ export function mapComplaint(raw: Record<string, unknown>): Complaint {
     sla_target_minutes: Number(raw.sla_target_minutes ?? 1440),
     sla_due_at: (raw.sla_due_at as string) ?? null,
     sla_breach_state: (raw.sla_breach_state as Complaint['sla_breach_state']) ?? null,
+    sla: raw.sla && typeof raw.sla === 'object' ? mapSlaSnapshot(raw.sla as Record<string, unknown>) : null,
     officer: raw.officer && typeof raw.officer === 'object'
       ? {
           staff_code: String((raw.officer as Record<string, unknown>).staff_code ?? ''),

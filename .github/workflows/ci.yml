@@ -88,6 +88,14 @@ jobs:
         if: env.DATABASE_URL != ''
         working-directory: services/nosih-api
         run: python scripts/verify_officer_booking.py
+      - name: Verify the SLA matrix, calendar and engine
+        if: env.DATABASE_URL != ''
+        working-directory: services/nosih-api
+        run: python scripts/verify_sla_system.py
+      - name: Verify SLA closure, reopen and class strength
+        if: env.DATABASE_URL != ''
+        working-directory: services/nosih-api
+        run: python scripts/verify_sla_integrity.py
       - name: Verify the portal booking contract over HTTP
         if: env.DATABASE_URL != ''
         working-directory: services/nosih-api

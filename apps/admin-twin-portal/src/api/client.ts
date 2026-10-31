@@ -45,6 +45,185 @@ import type {
   WorkOrder,
 } from '../types';
 
+// ---------------------------------------------------------------------------
+// SLA read models.
+//
+// The SLA engine and its read models live in the database; the admin portal
+// only reads them. These interfaces mirror `rpc_sla_matrix`, `rpc_sla_board`
+// and `rpc_sla_compliance` exactly, so the console never guesses a shape.
+// ---------------------------------------------------------------------------
+
+export type SlaBasis = 'CLOCK' | 'WORKING';
+export type SlaClockState = 'HEALTHY' | 'WARNING' | 'BREACHED' | 'PAUSED' | 'CLOSED';
+export type SlaResponseState = 'PENDING' | 'MET' | 'WARNING' | 'BREACHED';
+
+export interface SlaPolicy {
+  priority_code: string;
+  priority_label: string;
+  service_name: string;
+  /** null means the policy covers every category for the priority. */
+  category: string | null;
+  response_target_mins: number;
+  resolution_target_mins: number;
+  response_hours: number;
+  resolution_hours: number;
+  resolution_days: number;
+  is_24x7: boolean;
+  basis: SlaBasis;
+  description: string;
+}
+
+export interface SlaCalendarDay {
+  day_date: string;
+  is_working_day: boolean;
+  label: string | null;
+  open_minute: number | null;
+  close_minute: number | null;
+  note: string | null;
+  opens_at: string | null;
+  closes_at: string | null;
+}
+
+export interface SlaWorkingHours {
+  opens_at: string;
+  closes_at: string;
+  timezone: string;
+  days: string;
+  note: string;
+}
+
+export interface SlaMatrix {
+  policies: SlaPolicy[];
+  calendar: SlaCalendarDay[];
+  working_hours: SlaWorkingHours;
+}
+
+export interface SlaOfficer {
+  staff_code: string;
+  full_name: string;
+  primary_skill: string;
+  skill_proficiency: number;
+  area: string;
+  assigned_jobs: number;
+  max_jobs: number;
+  hourly_cost_inr: number;
+}
+
+export interface SlaBoardRow {
+  clock_id: number;
+  work_order_id: number;
+  work_order_number: string;
+  ticket_number: string | null;
+  title: string | null;
+  space_code: string;
+  category: string | null;
+  urgency: string | null;
+  department_code: string;
+  priority_code: string;
+  priority_label: string;
+  service_name: string;
+  policy_note: string | null;
+  is_24x7: boolean;
+  basis: SlaBasis;
+  state: SlaClockState;
+  breach_state: string;
+  response_state: SlaResponseState;
+  first_response_at: string | null;
+  response_target_mins: number;
+  response_elapsed_mins: number;
+  response_remaining_mins: number;
+  response_progress_pct: number;
+  resolution_target_mins: number;
+  resolution_elapsed_mins: number;
+  resolution_remaining_mins: number;
+  resolution_progress_pct: number;
+  pause_reason: string | null;
+  last_milestone: string | null;
+  escalation_tier: number;
+  escalated_at: string | null;
+  closed_at: string | null;
+  closed_reason: string | null;
+  officer: SlaOfficer | null;
+  officer_email: string | null;
+  head_of_department: string | null;
+  work_order_status: string | null;
+}
+
+export interface SlaBoardSummary {
+  total: number;
+  healthy: number;
+  warning: number;
+  breached: number;
+  paused: number;
+  closed: number;
+  response_pending: number;
+}
+
+export interface SlaBoard {
+  rows: SlaBoardRow[];
+  summary: SlaBoardSummary;
+}
+
+export interface SlaComplianceTotals {
+  requests: number;
+  closed: number;
+  met: number;
+  missed: number;
+  open: number;
+  open_breached: number;
+  compliance_pct: number;
+  responded: number;
+  response_missed: number;
+  response_compliance_pct: number;
+  avg_resolution_mins: number;
+}
+
+export interface SlaDepartmentCompliance {
+  department_code: string;
+  services: string[];
+  requests: number;
+  closed: number;
+  met: number;
+  breached: number;
+  open: number;
+  compliance_pct: number;
+  avg_resolution_mins: number;
+}
+
+export interface SlaPriorityCompliance {
+  priority_code: string;
+  requests: number;
+  closed: number;
+  met: number;
+  breached: number;
+  compliance_pct: number;
+}
+
+export interface SlaServiceCompliance {
+  service_name: string;
+  requests: number;
+  closed: number;
+  met: number;
+  compliance_pct: number;
+}
+
+export interface SlaCompliance {
+  window_days: number;
+  window_basis: string;
+  totals: SlaComplianceTotals;
+  by_department: SlaDepartmentCompliance[];
+  by_priority: SlaPriorityCompliance[];
+  by_service: SlaServiceCompliance[];
+}
+
+export type SlaComplianceReport = SlaCompliance;
+
+/** Outcome of a pause or resume request; the RPC resolves the actor itself. */
+export interface SlaClockAction {
+  success: boolean;
+  error?: string;
+}
+
 export const TOKEN_STORAGE_KEY = 'nosih.admin.access_token';
 
 export class ApiError extends Error {
@@ -249,6 +428,171 @@ function mapSla(raw: Raw): SlaClock {
       ? new Date(new Date(str(raw.last_tick_at)).getTime() + remaining * 60_000).toISOString()
       : undefined,
     escalation_log: [],
+  };
+}
+
+function nullable(value: unknown): string | null {
+  return value === null || value === undefined || value === '' ? null : String(value);
+}
+
+function mapSlaPolicy(raw: Raw): SlaPolicy {
+  const is24x7 = Boolean(raw.is_24x7);
+  return {
+    priority_code: str(raw.priority_code),
+    priority_label: str(raw.priority_label),
+    service_name: str(raw.service_name),
+    category: nullable(raw.category),
+    response_target_mins: num(raw.response_target_mins),
+    resolution_target_mins: num(raw.resolution_target_mins),
+    response_hours: num(raw.response_hours),
+    resolution_hours: num(raw.resolution_hours),
+    resolution_days: num(raw.resolution_days),
+    is_24x7: is24x7,
+    basis: (raw.basis as SlaBasis) ?? (is24x7 ? 'CLOCK' : 'WORKING'),
+    description: str(raw.description),
+  };
+}
+
+function mapSlaCalendarDay(raw: Raw): SlaCalendarDay {
+  return {
+    day_date: str(raw.day_date),
+    is_working_day: Boolean(raw.is_working_day),
+    label: nullable(raw.label),
+    open_minute: raw.open_minute === null || raw.open_minute === undefined ? null : num(raw.open_minute),
+    close_minute: raw.close_minute === null || raw.close_minute === undefined ? null : num(raw.close_minute),
+    note: nullable(raw.note),
+    opens_at: nullable(raw.opens_at),
+    closes_at: nullable(raw.closes_at),
+  };
+}
+
+function mapSlaWorkingHours(raw: Raw): SlaWorkingHours {
+  return {
+    opens_at: str(raw.opens_at ?? '09:00'),
+    closes_at: str(raw.closes_at ?? '15:00'),
+    timezone: str(raw.timezone ?? 'Asia/Kolkata'),
+    days: str(raw.days ?? 'Monday to Friday'),
+    note: str(raw.note),
+  };
+}
+
+function mapSlaOfficer(raw: Raw): SlaOfficer {
+  return {
+    staff_code: str(raw.staff_code),
+    full_name: str(raw.full_name),
+    primary_skill: str(raw.primary_skill),
+    skill_proficiency: num(raw.skill_proficiency),
+    area: str(raw.area),
+    assigned_jobs: num(raw.assigned_jobs),
+    max_jobs: num(raw.max_jobs),
+    hourly_cost_inr: num(raw.hourly_cost_inr),
+  };
+}
+
+function mapSlaBoardRow(raw: Raw): SlaBoardRow {
+  const officer = raw.officer ? (raw.officer as Raw) : null;
+  const is24x7 = Boolean(raw.is_24x7);
+  return {
+    clock_id: num(raw.clock_id),
+    work_order_id: num(raw.work_order_id),
+    work_order_number: str(raw.work_order_number),
+    ticket_number: nullable(raw.ticket_number),
+    title: nullable(raw.title),
+    space_code: str(raw.space_code),
+    category: nullable(raw.category),
+    urgency: nullable(raw.urgency),
+    department_code: str(raw.department_code ?? 'CAMPUS'),
+    priority_code: str(raw.priority_code),
+    priority_label: str(raw.priority_label),
+    service_name: str(raw.service_name),
+    policy_note: nullable(raw.policy_note),
+    is_24x7: is24x7,
+    basis: (raw.basis as SlaBasis) ?? (is24x7 ? 'CLOCK' : 'WORKING'),
+    state: (raw.state as SlaClockState) ?? 'HEALTHY',
+    breach_state: str(raw.breach_state),
+    response_state: (raw.response_state as SlaResponseState) ?? 'PENDING',
+    first_response_at: nullable(raw.first_response_at),
+    response_target_mins: num(raw.response_target_mins),
+    response_elapsed_mins: num(raw.response_elapsed_mins),
+    response_remaining_mins: num(raw.response_remaining_mins),
+    response_progress_pct: num(raw.response_progress_pct),
+    resolution_target_mins: num(raw.resolution_target_mins),
+    resolution_elapsed_mins: num(raw.resolution_elapsed_mins),
+    resolution_remaining_mins: num(raw.resolution_remaining_mins),
+    resolution_progress_pct: num(raw.resolution_progress_pct),
+    pause_reason: nullable(raw.pause_reason),
+    last_milestone: nullable(raw.last_milestone),
+    escalation_tier: num(raw.escalation_tier),
+    escalated_at: nullable(raw.escalated_at),
+    closed_at: nullable(raw.closed_at),
+    closed_reason: nullable(raw.closed_reason),
+    officer: officer ? mapSlaOfficer(officer) : null,
+    officer_email: nullable(raw.officer_email),
+    head_of_department: nullable(raw.head_of_department),
+    work_order_status: nullable(raw.work_order_status),
+  };
+}
+
+function mapSlaBoardSummary(raw: Raw): SlaBoardSummary {
+  return {
+    total: num(raw.total),
+    healthy: num(raw.healthy),
+    warning: num(raw.warning),
+    breached: num(raw.breached),
+    paused: num(raw.paused),
+    closed: num(raw.closed),
+    response_pending: num(raw.response_pending),
+  };
+}
+
+function mapSlaComplianceTotals(raw: Raw): SlaComplianceTotals {
+  return {
+    requests: num(raw.requests),
+    closed: num(raw.closed),
+    met: num(raw.met),
+    missed: num(raw.missed),
+    open: num(raw.open),
+    open_breached: num(raw.open_breached),
+    compliance_pct: num(raw.compliance_pct),
+    responded: num(raw.responded),
+    response_missed: num(raw.response_missed),
+    response_compliance_pct: num(raw.response_compliance_pct),
+    avg_resolution_mins: num(raw.avg_resolution_mins),
+  };
+}
+
+function mapSlaDepartmentCompliance(raw: Raw): SlaDepartmentCompliance {
+  return {
+    department_code: str(raw.department_code),
+    services: Array.isArray(raw.services) ? (raw.services as unknown[]).map(str).filter(Boolean) : [],
+    requests: num(raw.requests),
+    closed: num(raw.closed),
+    met: num(raw.met),
+    breached: num(raw.breached),
+    open: num(raw.open),
+    compliance_pct: num(raw.compliance_pct),
+    avg_resolution_mins: num(raw.avg_resolution_mins),
+  };
+}
+
+function mapSlaPriorityCompliance(raw: Raw): SlaPriorityCompliance {
+  return {
+    priority_code: str(raw.priority_code),
+    requests: num(raw.requests),
+    closed: num(raw.closed),
+    met: num(raw.met),
+    breached: num(raw.breached),
+    compliance_pct: num(raw.compliance_pct),
+  };
+}
+
+function mapSlaServiceCompliance(raw: Raw): SlaServiceCompliance {
+  return {
+    service_name: str(raw.service_name),
+    requests: num(raw.requests),
+    closed: num(raw.closed),
+    met: num(raw.met),
+    compliance_pct: num(raw.compliance_pct),
   };
 }
 
@@ -1111,6 +1455,53 @@ export const api = {
           space_code: raw.space_code ?? workOrder?.space_code,
         });
       });
+    },
+    matrix: async (): Promise<SlaMatrix> => {
+      const raw = (await rpc.slaMatrix()) as Raw;
+      if (raw.error) throw new ApiError(str(raw.error), raw.error === 'FORBIDDEN' ? 403 : 400, raw);
+      return {
+        policies: Array.isArray(raw.policies) ? (raw.policies as Raw[]).map(mapSlaPolicy) : [],
+        calendar: Array.isArray(raw.calendar) ? (raw.calendar as Raw[]).map(mapSlaCalendarDay) : [],
+        working_hours: mapSlaWorkingHours((raw.working_hours as Raw) ?? {}),
+      };
+    },
+    board: async (state: string = 'ALL', limit: number = 120): Promise<SlaBoard> => {
+      const raw = (await rpc.slaBoard(state, limit)) as Raw;
+      if (raw.error) throw new ApiError(str(raw.error), raw.error === 'FORBIDDEN' ? 403 : 400, raw);
+      return {
+        rows: Array.isArray(raw.rows) ? (raw.rows as Raw[]).map(mapSlaBoardRow) : [],
+        summary: mapSlaBoardSummary((raw.summary as Raw) ?? {}),
+      };
+    },
+    compliance: async (days: number = 90): Promise<SlaComplianceReport> => {
+      const raw = (await rpc.slaCompliance(days)) as Raw;
+      if (raw.error) throw new ApiError(str(raw.error), raw.error === 'FORBIDDEN' ? 403 : 400, raw);
+      return {
+        window_days: num(raw.window_days),
+        window_basis: str(raw.window_basis),
+        totals: mapSlaComplianceTotals((raw.totals as Raw) ?? {}),
+        by_department: Array.isArray(raw.by_department)
+          ? (raw.by_department as Raw[]).map(mapSlaDepartmentCompliance)
+          : [],
+        by_priority: Array.isArray(raw.by_priority)
+          ? (raw.by_priority as Raw[]).map(mapSlaPriorityCompliance)
+          : [],
+        by_service: Array.isArray(raw.by_service)
+          ? (raw.by_service as Raw[]).map(mapSlaServiceCompliance)
+          : [],
+      };
+    },
+    // The RPC resolves the actor from the session; the email is only a
+    // fallback, so the console always passes the signed-in address.
+    pauseClock: async (workOrderId: number, reason: string, email: string): Promise<SlaClockAction> => {
+      const raw = (await rpc.slaPauseClock(workOrderId, reason, email)) as Raw;
+      if (raw.error) throw new ApiError(str(raw.error), 400, raw);
+      return { success: Boolean(raw.success), error: nullable(raw.error) ?? undefined };
+    },
+    resumeClock: async (workOrderId: number, email: string): Promise<SlaClockAction> => {
+      const raw = (await rpc.slaResumeClock(workOrderId, email)) as Raw;
+      if (raw.error) throw new ApiError(str(raw.error), 400, raw);
+      return { success: Boolean(raw.success), error: nullable(raw.error) ?? undefined };
     },
   },
 

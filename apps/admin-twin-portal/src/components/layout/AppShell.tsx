@@ -25,7 +25,7 @@ const navigation: NavigationItem[] = [
   { id: 'twin', label: 'Digital twin', shortLabel: 'Twin', icon: Boxes, roles: allRoles },
   { id: 'dispatch', label: 'Incidents & dispatch', shortLabel: 'Dispatch', icon: GitPullRequestArrow, roles: ['MAINTENANCE_TECHNICIAN', 'INCIDENT_MANAGER', 'FACILITIES_ADMIN', 'SYSTEM_ADMIN'] },
   { id: 'inventory', label: 'Inventory & procurement', shortLabel: 'Inventory', icon: Archive, roles: ['MAINTENANCE_TECHNICIAN', 'FACILITIES_ADMIN', 'PROCUREMENT_APPROVER', 'SYSTEM_ADMIN'] },
-  { id: 'sla', label: 'SLA & escalation', shortLabel: 'SLA', icon: FileClock, roles: ['INCIDENT_MANAGER', 'FACILITIES_ADMIN', 'SYSTEM_ADMIN'] },
+  { id: 'sla', label: 'SLA & escalation', shortLabel: 'SLA', icon: FileClock, roles: ['INCIDENT_MANAGER', 'FACILITIES_ADMIN', 'SYSTEM_ADMIN', 'DEPARTMENT_MANAGER'] },
   { id: 'moderation', label: 'Moderation & vault', shortLabel: 'Moderation', icon: ShieldAlert, roles: ['INCIDENT_MANAGER', 'SYSTEM_ADMIN'] },
   { id: 'integrations', label: 'External integrations', shortLabel: 'Integrations', icon: Mail, roles: ['INCIDENT_MANAGER', 'FACILITIES_ADMIN', 'SYSTEM_ADMIN'] },
   { id: 'timetable', label: 'Timetable engine', shortLabel: 'Timetable', icon: CalendarRange, roles: allRoles },

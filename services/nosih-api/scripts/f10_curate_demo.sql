@@ -88,6 +88,51 @@ select v.space_code, v.asset_code, v.wo_number, v.category, v.action, '[]', v.te
       where m.work_order_number = v.wo_number and m.asset_code = v.asset_code
    );
 
+-- 2b. Repair every other live ticket, whatever raised it ---------------------
+-- A test report filed from the portal during a demo run must not turn the
+-- curated set into four live faults. Anything that is not one of the three
+-- curated tickets is treated as a report that has already been dealt with:
+-- the ticket is closed, the work order is completed and its clock stops.
+update public.complaints c
+   set status = 'RESOLVED',
+       updated_at = now()
+ where c.status in ('OPEN', 'TRIAGED', 'IN_PROGRESS', 'BLOCKED_PARTS')
+   and c.ticket_number not in ('CMP-2026-0978', 'CMP-2026-0304', 'CMP-2026-0984');
+
+update public.work_orders w
+   set status = 'COMPLETED',
+       completed_at = coalesce(w.completed_at, now()),
+       estimated_cost_inr = coalesce(w.estimated_cost_inr, 1200)
+  from public.complaints c
+ where c.id = w.complaint_id
+   and w.status in ('PENDING_ASSIGNMENT', 'ASSIGNED', 'IN_PROGRESS', 'BLOCKED_PARTS')
+   and c.ticket_number not in ('CMP-2026-0978', 'CMP-2026-0304', 'CMP-2026-0984');
+
+update public.sla_clocks sc
+   set is_paused = true,
+       closed_at = coalesce(sc.closed_at, now()),
+       closed_reason = coalesce(sc.closed_reason, 'COMPLETED'),
+       last_tick_at = now()
+  from public.work_orders w
+  join public.complaints c on c.id = w.complaint_id
+ where sc.target_type = 'WORK_ORDER'
+   and sc.target_id = w.id
+   and sc.closed_at is null
+   and c.ticket_number not in ('CMP-2026-0978', 'CMP-2026-0304', 'CMP-2026-0984');
+
+-- A clock that was stopped by hand is only running again if the request is
+-- still one of the three curated faults.
+update public.sla_clocks sc
+   set is_paused = false,
+       pause_reason = null,
+       last_tick_at = now()
+  from public.work_orders w
+  join public.complaints c on c.id = w.complaint_id
+ where sc.target_type = 'WORK_ORDER'
+   and sc.target_id = w.id
+   and sc.closed_at is null
+   and c.ticket_number in ('CMP-2026-0978', 'CMP-2026-0304', 'CMP-2026-0984');
+
 update public.assets
    set status = 'FAULTY'
  where asset_code in ('FAN-C1-02-01', 'LED-C1-02-01', 'INST-LAB-PHYS-04-14')
